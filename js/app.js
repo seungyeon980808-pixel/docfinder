@@ -69,6 +69,7 @@ function visibleDocuments(state) {
 }
 
 let localIndexPromise;
+let publicBootPromise;
 const deepLinkedId = location.hash.startsWith("#doc=") ? location.hash.slice(5) : "";
 const publicSnapshotUrls = resolvePublicSnapshotUrls();
 
@@ -196,13 +197,17 @@ async function runSearch() {
   if ((state.localMode || state.publicMode) && state.mode === "content" && state.query.trim()) {
     updateView({ searching: true, searchProgress: "색인 검색 중" });
     try {
-      localIndexPromise ||= fetch("private/search-index.json", { cache: "no-store" }).then((response) => {
-        if (!response.ok) throw new Error("로컬 색인을 찾을 수 없습니다.");
-        return response.json();
-      });
+      if (state.publicMode) await publicBootPromise;
+      else {
+        localIndexPromise ||= fetch("private/search-index.json", { cache: "no-store" }).then((response) => {
+          if (!response.ok) throw new Error("로컬 색인을 찾을 수 없습니다.");
+          return response.json();
+        });
+      }
       const index = await localIndexPromise;
       if (index.version !== 1 || !Array.isArray(index.entries)) throw new Error("로컬 색인 형식이 올바르지 않습니다.");
-      updateView({ contentMatches: searchLocalIndex(state.documents, index.entries, state.query), searching: false, searchProgress: "" });
+      const documents = state.publicMode ? store.get().documents : state.documents;
+      updateView({ contentMatches: searchLocalIndex(documents, index.entries, state.query), searching: false, searchProgress: "" });
     } catch {
       localIndexPromise = undefined;
       updateView({ searching: false, searchProgress: "", notice: { visible: true, type: "error", title: state.publicMode ? "게시된 본문 검색에 실패했습니다" : "로컬 본문 검색에 실패했습니다", copy: state.publicMode ? "페이지를 새로고침한 뒤 다시 시도하세요." : "색인을 다시 생성한 뒤 새로고침하세요." } });
@@ -396,7 +401,8 @@ initRhwpEditor();
 if (deepLinkedId && initialDocuments.some((documentItem) => documentItem.id === deepLinkedId)) updateView({ selectedId: deepLinkedId });
 else updateView({});
 if (publicMode) {
-  loadPublishedCatalog().catch(() => updateView({
+  publicBootPromise = loadPublishedCatalog();
+  publicBootPromise.catch(() => updateView({
     connection: "error",
     notice: { visible: true, type: "error", title: "게시 문서를 불러오지 못했습니다", copy: "게시된 목록과 검색 색인을 확인한 뒤 새로고침하세요." }
   }));

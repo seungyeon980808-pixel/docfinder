@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import * as buildConfig from "../config.js";
@@ -61,6 +63,204 @@ function useMemoryStorage(context, entries = {}) {
   });
 }
 
+function runDelayedPublicSearchHarness() {
+  const appPath = fileURLToPath(new URL("../js/app.js", import.meta.url));
+  const source = String.raw`
+    const assert = require("node:assert/strict");
+    const fs = require("node:fs");
+    const vm = require("node:vm");
+    const { pathToFileURL } = require("node:url");
+
+    const appPath = process.env.DOCFINDER_APP_PATH;
+    const appUrl = pathToFileURL(appPath).href;
+    const listeners = new Map();
+    const elements = new Map();
+    const requests = [];
+    let releaseMetadata;
+    const metadataPromise = new Promise((resolve) => { releaseMetadata = resolve; });
+
+    function element(selector) {
+      if (elements.has(selector)) return elements.get(selector);
+      const value = {
+        value: "",
+        checked: false,
+        dataset: {},
+        style: {},
+        open: false,
+        files: [],
+        addEventListener(type, handler) { listeners.set(selector + ":" + type, handler); },
+        append() {},
+        click() {},
+        close() {},
+        closest() { return null; },
+        focus() {},
+        getBoundingClientRect() { return { bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0 }; },
+        matches() { return false; },
+        querySelector() { return element(selector + " child"); },
+        querySelectorAll() { return []; },
+        remove() {},
+        showModal() {}
+      };
+      elements.set(selector, value);
+      return value;
+    }
+
+    const document = {
+      documentElement: { dataset: {} },
+      body: { append() {} },
+      addEventListener(type, handler) { listeners.set("document:" + type, handler); },
+      createElement() { return element("created"); },
+      querySelector: element,
+      querySelectorAll() { return []; }
+    };
+    const location = {
+      hash: "",
+      hostname: "example.test",
+      href: "https://example.test/apps/docfinder/",
+      pathname: "/apps/docfinder/",
+      search: ""
+    };
+    const context = vm.createContext({
+      Blob,
+      URL,
+      URLSearchParams,
+      console,
+      document,
+      history: { replaceState() {} },
+      innerHeight: 800,
+      innerWidth: 1280,
+      location,
+      navigator: { clipboard: { async writeText() {} } },
+      setTimeout,
+      window: { addEventListener() {}, open() {} }
+    });
+    context.globalThis = context;
+    context.fetch = async (input) => {
+      requests.push(String(input));
+      return new Response("not found", { status: 404 });
+    };
+
+    const documentItem = {
+      id: "opaque-early",
+      name: "fixture.pdf",
+      folder: "Fixture",
+      path: "Fixture / fixture.pdf",
+      format: "pdf",
+      modifiedTime: "2026-09-26T00:00:00.000Z",
+      source: "public",
+      sourceUrl: "https://example.test/apps/docfinder/library/originals/opaque-early.pdf"
+    };
+    const defaultConfig = {
+      appName: "DocFinder",
+      organization: "Fixture",
+      googleClientId: "",
+      rootFolderId: "",
+      pdfEditorUrl: "",
+      demoMode: false
+    };
+    const modules = new Map();
+    function synthetic(specifier, exports) {
+      if (modules.has(specifier)) return modules.get(specifier);
+      const module = new vm.SyntheticModule(Object.keys(exports), function initialize() {
+        for (const [name, value] of Object.entries(exports)) this.setExport(name, value);
+      }, { context, identifier: new URL(specifier, appUrl).href });
+      modules.set(specifier, module);
+      return module;
+    }
+    function createStore(initial) {
+      let state = initial;
+      let subscriber = () => {};
+      context.__state = state;
+      return {
+        get() { return state; },
+        subscribe(next) { subscriber = next; },
+        update(updater) {
+          state = updater(state);
+          context.__state = state;
+          subscriber(state);
+        }
+      };
+    }
+    const moduleExports = {
+      "../config.js": {
+        BUILD_PROFILE: { profile: "public", settings: {} },
+        DEFAULT_CONFIG: defaultConfig,
+        resolvePublicSnapshotUrls: () => ({ catalog: "catalog", searchIndex: "index" })
+      },
+      "../data/demo-documents.js": { DEMO_DOCUMENTS: [] },
+      "./detail-panel.js?v=verification-2": { createDetailPanelController: () => ({ close() {}, open() {} }) },
+      "./drive-api.js": {
+        DriveError: class DriveError extends Error {},
+        authorizeDrive: async () => "",
+        downloadDriveFile: async () => new ArrayBuffer(0),
+        scanDriveFolder: async () => ({ rootName: "", documents: [] }),
+        searchDriveContent: async () => []
+      },
+      "./hwp-index.js?v=verification-2": { searchHwpContent: async () => ({ matches: [], failures: [] }) },
+      "./local-index.js?v=verification-2": {
+        searchLocalIndex: (documents, entries, query) => {
+          const terms = query.toLowerCase().trim().split(/\\s+/u);
+          const ids = new Set(entries.filter((entry) => terms.every((term) => entry.text.toLowerCase().includes(term))).map((entry) => entry.id));
+          return documents.filter((item) => ids.has(item.id));
+        }
+      },
+      "./pdf-editor.js": { openPdfEditor() {} },
+      "./render.js?v=width-fit-1": { renderApp() {} },
+      "./rhwp-editor.js": { initRhwpEditor() {}, openRhwpEditor: async () => {} },
+      "./search.js?v=verification-2": {
+        documentFormat: () => "pdf",
+        filterDocuments: (documents) => documents,
+        matchProximity: () => null
+      },
+      "./store.js": {
+        compareSnapshot: () => ({ added: [], updated: [], removed: [] }),
+        createStore,
+        loadPublicSnapshot: async () => metadataPromise,
+        loadSettings: () => defaultConfig,
+        loadSnapshot: () => [],
+        saveSettings() {},
+        saveSnapshot() {},
+        selectSnapshotDocumentId: (documents) => documents[0]?.id || ""
+      },
+      "./toast.js": { createToast: () => () => {} }
+    };
+
+    (async () => {
+      const app = new vm.SourceTextModule(fs.readFileSync(appPath, "utf8"), {
+        context,
+        identifier: appUrl,
+        initializeImportMeta(meta) { meta.url = appUrl; }
+      });
+      await app.link((specifier) => synthetic(specifier, moduleExports[specifier]));
+      await app.evaluate();
+
+      await listeners.get("#search-mode:change")({ target: { value: "content" } });
+      await listeners.get("#search-input:input")({ target: { value: "alpha beta" } });
+      const submitted = listeners.get("#search-form:submit")({ preventDefault() {} });
+      await new Promise((resolve) => setImmediate(resolve));
+      releaseMetadata({
+        documents: [documentItem],
+        generatedAt: "2026-09-26T00:00:00.000Z",
+        indexEntries: [{ id: documentItem.id, page: 1, text: "alpha beta synthetic" }]
+      });
+      await submitted;
+      await new Promise((resolve) => setImmediate(resolve));
+
+      assert.deepEqual(requests, [], "public early search must not request a private index");
+      assert.equal(context.__state.contentMatches?.length, 1, "queued early search must complete after public metadata loads");
+      process.stdout.write(JSON.stringify({ requests, matches: context.__state.contentMatches.length }));
+    })().catch((error) => {
+      process.stderr.write(error.stack + "\\n");
+      process.exitCode = 1;
+    });
+  `;
+  return spawnSync(process.execPath, ["--experimental-vm-modules", "-e", source], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+    env: { ...process.env, DOCFINDER_APP_PATH: appPath, NODE_NO_WARNINGS: "1" }
+  });
+}
+
 test("private boot keeps saved browser settings", (context) => {
   // Given: a private build and an existing browser preference.
   useMemoryStorage(context, {
@@ -102,6 +302,16 @@ test("public boot ignores saved OAuth, folder, and demo settings", (context) => 
     pdfEditorUrl: "./editor/",
     demoMode: false
   });
+});
+
+test("public content search submitted during delayed snapshot boot waits for the public index", () => {
+  // Given: the public profile is interactive while catalog and search-index metadata are still pending.
+  // When: a content query is submitted before that metadata resolves.
+  const result = runDelayedPublicSearchHarness();
+
+  // Then: no private fallback is requested and the queued query completes from the public index.
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), { requests: [], matches: 1 });
 });
 
 test("public snapshot URLs stay below root and nested deployment paths", () => {

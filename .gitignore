@@ -2,3 +2,4 @@
 private/
 dist/
 source-package/
+node_modules/

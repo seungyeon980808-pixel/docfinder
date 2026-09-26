@@ -46,18 +46,27 @@ async function makeCorpus(sandbox, filename = "fixture.pdf", contents = blankPdf
   return corpus;
 }
 
-test("source tree remains private and uses only the approved root link", async () => {
-  // Given: the checked-out application and its approved local corpus connection.
+test("snapshot build leaves the approved private root link and source bytes unchanged", async (context) => {
+  // Given: a self-contained private/docs link to an approved fixture corpus.
+  const sandbox = await fs.mkdtemp(path.join(os.tmpdir(), "docfinder-snapshot-private-root-"));
+  context.after(() => fsSync.rmSync(sandbox, { recursive: true, force: true }));
+  const approved = await makeCorpus(sandbox);
+  const privateRoot = path.join(sandbox, "private");
+  const docs = path.join(privateRoot, "docs");
+  const output = path.join(sandbox, "dist");
+  await fs.mkdir(privateRoot);
+  await fs.symlink(approved, docs, "dir");
   const config = await fs.readFile(path.join(appRoot, "config.js"), "utf8");
-  const docs = await fs.lstat(path.join(appRoot, "private", "docs"));
+  const before = await fs.readFile(path.join(approved, "fixture.pdf"));
 
-  // When: the source build profile and corpus boundary are characterized.
-  const nestedEntries = await fs.readdir(path.join(appRoot, "private", "docs"), { withFileTypes: true });
+  // When: the public snapshot CLI builds from that root link.
+  const result = runBuilder(docs, output);
 
-  // Then: source remains private, the root may be a link, and no nested link is accepted as baseline input.
+  // Then: the private profile, approved link, and original bytes remain unchanged.
+  assert.equal(result.status, 0, result.stderr);
   assert.match(config, /profile:\s*"private"/u);
-  assert.equal(docs.isSymbolicLink(), true);
-  assert.equal(nestedEntries.some((entry) => entry.isSymbolicLink()), false);
+  assert.equal((await fs.lstat(docs)).isSymbolicLink(), true);
+  assert.deepEqual(await fs.readFile(path.join(approved, "fixture.pdf")), before);
 });
 
 test("builder publishes a nested fixture as an atomic public snapshot", async (context) => {

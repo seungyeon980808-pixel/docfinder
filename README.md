@@ -59,9 +59,10 @@ node -e 'const m=require(process.argv[1]); console.log(Object.fromEntries(Object
 
 ## 테스트와 스테이징 확인
 
-로컬 색인을 만든 뒤 전체 Node 테스트를 실행합니다.
+새 포크 또는 소스 패키지는 개인 문서와 `private/` 폴더 없이 먼저 의존성을 설치하고 전체 Node 테스트를 실행할 수 있습니다. 테스트가 끝난 뒤에만 자신의 문서 폴더를 `index:local` 또는 `build:public -- --source`에 전달하십시오.
 
 ```bash
+npm ci
 npm test
 ```
 

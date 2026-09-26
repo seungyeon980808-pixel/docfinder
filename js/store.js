@@ -1,5 +1,6 @@
 const SETTINGS_KEY = "5e-manual-library-settings-v1";
 const SNAPSHOT_KEY = "5e-manual-library-drive-snapshot-v1";
+const PUBLIC_DOCUMENT_FORMATS = new Set(["pdf", "hwp", "hwpx"]);
 
 function readJson(key, fallback) {
   try {
@@ -75,6 +76,14 @@ function resolveHostedOriginal(documentItem, catalogUrl, appBaseUrl) {
   return url.href;
 }
 
+function parsePublicDocumentFormat(documentItem) {
+  const format = documentItem.format === undefined
+    ? documentItem.name.split(".").pop()?.toLocaleLowerCase("ko-KR")
+    : documentItem.format;
+  if (!PUBLIC_DOCUMENT_FORMATS.has(format)) throw new TypeError("Public catalog document format is invalid.");
+  return format;
+}
+
 function normalizePublicDocument(documentItem, catalogUrl, appBaseUrl) {
   if (!documentItem
     || typeof documentItem.id !== "string"
@@ -83,13 +92,14 @@ function normalizePublicDocument(documentItem, catalogUrl, appBaseUrl) {
     || !documentItem.name.trim()) {
     throw new TypeError("Public catalog document is invalid.");
   }
+  const format = parsePublicDocumentFormat(documentItem);
   const sourceUrl = resolveHostedOriginal(documentItem, catalogUrl, appBaseUrl);
   return {
     id: documentItem.id,
     name: documentItem.name,
     folder: typeof documentItem.folder === "string" ? documentItem.folder : "전체",
     path: typeof documentItem.path === "string" ? documentItem.path : documentItem.name,
-    format: typeof documentItem.format === "string" ? documentItem.format : "",
+    format,
     mimeType: typeof documentItem.mimeType === "string" ? documentItem.mimeType : "",
     size: Number.isFinite(documentItem.size) ? documentItem.size : 0,
     modifiedTime: typeof documentItem.modifiedTime === "string" ? documentItem.modifiedTime : "",
