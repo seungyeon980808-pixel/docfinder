@@ -1,0 +1,14 @@
+{
+  "name": "docfinder",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "pdfjs-dist": "6.3.289"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "qa:public": "node tests/public-release-qa.cjs --dist dist",
+    "index:local": "node scripts/build-local-index.mjs",
+    "build:public": "node scripts/build-public-snapshot.mjs"
+  }
+}

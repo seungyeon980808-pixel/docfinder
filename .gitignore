@@ -1,0 +1,4 @@
+# Contains extracted text and links to private, user-managed documents.
+private/
+dist/
+source-package/
