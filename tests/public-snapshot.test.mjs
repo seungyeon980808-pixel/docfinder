@@ -106,6 +106,11 @@ test("builder publishes a nested fixture as an atomic public snapshot", async (c
   assert.doesNotMatch(JSON.stringify({ catalog, index, manifest }), /private\/docs|drive\.google|googleClientId|rootFolderId/u);
   assert.doesNotMatch(`${result.stdout}${result.stderr}`, /안내\.pdf/u);
   assert.match(await fs.readFile(path.join(output, "_headers"), "utf8"), /catalog\.json[\s\S]*no-store[\s\S]*originals\/\*[\s\S]*immutable/u);
+  const notFoundPage = await fs.readFile(path.join(output, "404.html"), "utf8");
+  assert.equal(notFoundPage, await fs.readFile(path.join(appRoot, "404.html"), "utf8"));
+  assert.match(notFoundPage, /<title>[^<]*404/u);
+  assert.match(notFoundPage, /href="\/"/u);
+  assert.doesNotMatch(notFoundPage, /<script\b/iu);
 });
 
 for (const [label, filename, contents, errorPattern] of [

@@ -1,34 +1,37 @@
 const EDITOR_URL = new URL("../vendor/rhwp-editor/index.js?v=0.8.6-1", import.meta.url).href;
 const STUDIO_URL = new URL("../vendor/rhwp-studio/index.html", import.meta.url).href;
 
-let editorPromise;
 let editor;
+let editorHost;
 let loadQueue = Promise.resolve();
 let generation = 0;
 let pageQueue = Promise.resolve();
 let activeSession;
 
+function disposeEditor() {
+  editor?.destroy();
+  editor = undefined;
+  editorHost?.remove();
+  editorHost = undefined;
+}
+
 async function prepareEditor() {
-  if (!editorPromise) {
-    editorPromise = import(EDITOR_URL).then(async ({ createEditor }) => {
-      const host = document.createElement("div");
-      host.className = "hwp-render-host";
-      host.setAttribute("aria-hidden", "true");
-      host.inert = true;
-      document.body.append(host);
-      try {
-        return await createEditor(host, { studioUrl: STUDIO_URL, renderer: "canvas2d" });
-      } catch (error) {
-        host.remove();
-        throw error;
-      }
-    }).catch((error) => {
-      editorPromise = undefined;
-      throw error;
-    });
+  // Studio retains visible-page state during loadFile; each document needs a fresh frame.
+  disposeEditor();
+  const { createEditor } = await import(EDITOR_URL);
+  const host = document.createElement("div");
+  host.className = "hwp-render-host";
+  host.setAttribute("aria-hidden", "true");
+  host.inert = true;
+  document.body.append(host);
+  try {
+    editor = await createEditor(host, { studioUrl: STUDIO_URL, renderer: "canvas2d" });
+    editorHost = host;
+    return editor;
+  } catch (error) {
+    host.remove();
+    throw error;
   }
-  editor = await editorPromise;
-  return editor;
 }
 
 export function clearHwpPreview() {
@@ -51,13 +54,16 @@ export function renderHwpPreview(viewer, documentItem, getBytes) {
   loadQueue = loadQueue.catch(() => {}).then(async () => {
     if (currentGeneration !== generation) return;
     try {
-      const [instance, bytes] = await Promise.all([prepareEditor(), getBytes(documentItem)]);
-      if (currentGeneration !== generation) return;
       await pageQueue.catch(() => {});
       if (currentGeneration !== generation) return;
-      const result = await instance.loadFile(bytes, documentItem.name, { skipUnsavedGuard: true, suppressDialogs: true });
+      const bytes = await getBytes(documentItem);
       if (currentGeneration !== generation) return;
+      const instance = await prepareEditor();
+      if (currentGeneration !== generation) { disposeEditor(); return; }
+      const result = await instance.loadFile(bytes, documentItem.name, { skipUnsavedGuard: true, suppressDialogs: true });
+      if (currentGeneration !== generation) { disposeEditor(); return; }
       const pageCount = Number(result?.pageCount || await instance.pageCount());
+      if (currentGeneration !== generation) { disposeEditor(); return; }
       if (!Number.isSafeInteger(pageCount) || pageCount < 1) throw new Error("원문 페이지가 없습니다.");
       viewer.innerHTML = Array.from({ length: pageCount }, (_, index) =>
         `<div class="source-page" data-page-number="${index + 1}"><img alt="${index + 1}쪽 한글 원문" /></div>`).join("");

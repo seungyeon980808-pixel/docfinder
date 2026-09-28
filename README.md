@@ -82,17 +82,42 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory "<임시-배포-폴더>
 
 공개 배포는 Git 연동이 아니라 **Direct Upload**를 사용합니다. 소스 저장소가 아니라 승인·검증한 `dist/` 폴더 하나만 업로드합니다. Direct Upload 프로젝트는 나중에 Git integration으로 바꿀 수 없으므로, 처음 만들기 전에 선택을 확인하십시오.
 
-명시적 배포 승인을 받은 뒤에만 다음을 실행합니다. 아직 이 저장소에 실제 공개 URL은 없습니다. 콘텐츠 소유자는 매니페스트 승인과 함께 정확한 `<소유자-승인-프로젝트명>` 및 예상 URL `https://<소유자-승인-프로젝트명>.pages.dev`를 승인·기록해야 합니다. `docfinder`를 쓰려면 그 정확한 이름을 승인값으로 적습니다. Wrangler가 이름 충돌로 다른 이름·접미사를 제시하거나 생성 결과가 승인값과 다르면 **업로드하지 말고 중단**하여 소유자의 새 승인을 받으십시오. 안정 URL은 승인된 `<프로젝트명>.pages.dev`이며 이 절차에서는 사용자 지정 도메인을 설정하지 않습니다.
+명시적 배포 승인을 받은 뒤에만 다음을 실행합니다. 새 포크의 공개 URL은 아래 프로젝트 확인 절차로 확정합니다. 콘텐츠 소유자는 매니페스트 승인과 함께 정확한 `<소유자-승인-프로젝트명>` 및 예상 URL `https://<소유자-승인-프로젝트명>.pages.dev`를 승인·기록해야 합니다. `docfinder`를 쓰려면 그 정확한 이름을 승인값으로 적습니다. Wrangler가 이름 충돌로 다른 이름·접미사를 제시하거나 생성 결과가 승인값과 다르면 **업로드하지 말고 중단**하여 소유자의 새 승인을 받으십시오. 안정 URL은 승인된 `<프로젝트명>.pages.dev`이며 이 절차에서는 사용자 지정 도메인을 설정하지 않습니다.
+
+Wrangler는 AI 에이전트 환경에서 새 정적 Pages 프로젝트 생성 명령을 Workers 배포로 자동 위임할 수 있습니다. 아래는 직접 Pages 생성을 확인한 **4.141.0**으로 버전을 고정하고 `--force`로 그 위임을 해제합니다. 이 옵션은 이름 충돌이나 소유자의 승인을 우회하지 않습니다. 버전을 바꿀 때는 이 동작을 다시 확인하십시오. 생성은 저장소·Wrangler 설정 트리 밖의 새 빈 폴더와 별도 캐시에서 실행합니다. 이 절의 서브셸만 해당 폴더로 이동하며 `<배포-폴더-절대경로>`는 앞서 검증한 출력 폴더의 절대경로로 바꿉니다.
 
 ```bash
-npx wrangler login
-npx wrangler pages project create "<소유자-승인-프로젝트명>" --production-branch main
-# 생성 결과의 프로젝트명과 pages.dev URL이 승인값과 정확히 일치할 때만 다음 명령을 실행
-npx wrangler pages deploy "<임시-배포-폴더>" --project-name "<소유자-승인-프로젝트명>"
-npx wrangler pages deployment list --project-name "<소유자-승인-프로젝트명>" --json
+npx --yes wrangler@4.141.0 login
+npx --yes wrangler@4.141.0 whoami
+```
+
+인증된 계정이 소유자가 승인한 계정인지 확인한 뒤, 새 프로젝트를 만들 때만 실행합니다. 이미 존재하는 프로젝트는 생성하지 말고 같은 Pages 목록·대시보드 확인을 수행합니다.
+
+```bash
+docfinder_ops_dir="$(mktemp -d)"
+(
+  cd "$docfinder_ops_dir" || exit 1
+  export WRANGLER_CACHE_DIR="$docfinder_ops_dir/.wrangler-cache"
+  npx --yes wrangler@4.141.0 pages project create "<소유자-승인-프로젝트명>" --production-branch main --force || exit 1
+  npx --yes wrangler@4.141.0 pages project list --json
+)
+```
+
+**업로드 전 중단 지점:** Pages 목록과 Cloudflare 대시보드에서 리소스 유형이 **Pages**이고, 계정·프로젝트명·`pages.dev` 호스트·production 브랜치 `main`이 승인값과 일치하는지 확인·기록합니다. Worker 또는 `workers.dev` 주소가 보이거나 확인할 수 없으면 업로드하지 않습니다. 생성 성공 문구만으로 이 확인을 대신하지 마십시오. 확인을 통과한 뒤에만 아래 업로드를 실행합니다.
+
+```bash
+docfinder_upload_dir="$(mktemp -d)"
+(
+  cd "$docfinder_upload_dir" || exit 1
+  export WRANGLER_CACHE_DIR="$docfinder_upload_dir/.wrangler-cache"
+  npx --yes wrangler@4.141.0 pages deploy "<배포-폴더-절대경로>" --project-name "<소유자-승인-프로젝트명>" --branch main || exit 1
+  npx --yes wrangler@4.141.0 pages deployment list --project-name "<소유자-승인-프로젝트명>" --json
+)
 ```
 
 배포 전·후에는 배포 이력과 실제 URL을 기록하고, 비로그인 브라우저에서 카탈로그·검색·미리보기·다운로드를 다시 확인합니다. Wrangler Direct Upload 한도는 파일 최대 20,000개, 파일 하나당 최대 25 MiB이며 ZIP이 아니라 단일 정적 폴더를 올립니다.
+
+배포 폴더 루트의 `404.html`은 필수입니다. [Pages의 서빙 규칙](https://developers.cloudflare.com/pages/configuration/serving-pages/)에 따라 이 파일이 없으면 없는 경로도 SPA 기본 동작으로 앱 루트에 연결될 수 있습니다. 빌더가 복사한 `404.html`을 유지하고, 실제 배포 URL에서 없는 경로와 `/private/`, `/.git/config` 같은 금지 경로가 앱 화면이나 HTTP 200 대신 **HTTP 404**를 반환하는지 확인합니다.
 
 ## 업데이트, 롤백, 긴급 제거
 
@@ -121,7 +146,7 @@ node scripts/release-package.mjs verify source "../docfinder-source"
 
 ## 학교망 제한은 아직 적용되지 않음
 
-아직 공개 URL이나 학교망/IP 제한은 활성화되어 있지 않습니다. 이 운영 설계에서 배포된 스냅샷은 `pages.dev`에서 공개이며 로그인·OAuth·비밀번호가 없습니다. 장래에 학교망만 허용하려면 검증된 학교 IPv4·IPv6 egress 범위, VPN/프록시 정책, 관리되는 edge 또는 도메인과 Cloudflare Access 정책을 준비해야 합니다. 기본 `pages.dev`와 preview 주소 같은 대체 경로도 함께 닫히는지 검증해야 합니다. 이 조건을 모두 설계·검증하기 전에는 학교망 제한이 활성화되었다고 주장하면 안 됩니다.
+이 절차는 학교망/IP 제한을 설정하지 않습니다. 이 운영 설계에서 배포된 스냅샷은 `pages.dev`에서 공개이며 로그인·OAuth·비밀번호가 없습니다. 장래에 학교망만 허용하려면 검증된 학교 IPv4·IPv6 egress 범위, VPN/프록시 정책, 관리되는 edge 또는 도메인과 Cloudflare Access 정책을 준비해야 합니다. 기본 `pages.dev`와 preview 주소 같은 대체 경로도 함께 닫히는지 검증해야 합니다. 이 조건을 모두 설계·검증하기 전에는 학교망 제한이 활성화되었다고 주장하면 안 됩니다.
 
 ## 공식 참고
 

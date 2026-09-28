@@ -33,7 +33,7 @@ async function writeFixture(root, relativePath, contents = relativePath) {
 async function makeReleaseFixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "docfinder-package-test-"));
   const files = [
-    ".gitignore", "README.md", "DESIGN.md", "index.html", "config.js", "package.json", "package-lock.json",
+    ".gitignore", "README.md", "DESIGN.md", "404.html", "index.html", "config.js", "package.json", "package-lock.json",
     "data/demo.js", "js/app.js", "styles/app.css", "vendor/runtime/app.wasm", "scripts/tool.mjs", "tests/tool.test.mjs",
     "library/catalog.json", "library/search-index.json", "library/originals/manual.pdf",
     "private/catalog.json", "evidence/screenshot.png", "node_modules/module.js", ".omo/state.json", ".git/config",
@@ -104,11 +104,11 @@ test("source package contains only forkable source allowlist entries", async (co
 
   // Then: its files exactly match the forkable-source allowlist.
   assert.deepEqual(await allFiles(output), [
-    ".gitignore", "DESIGN.md", "README.md", "config.js", "data/demo.js", "index.html", "js/app.js",
+    ".gitignore", "404.html", "DESIGN.md", "README.md", "config.js", "data/demo.js", "index.html", "js/app.js",
     "package-lock.json", "package.json", "scripts/tool.mjs", "styles/app.css", "tests/tool.test.mjs",
     "vendor/runtime/app.wasm"
   ]);
-  assert.equal(report.fileCount, 13);
+  assert.equal(report.fileCount, 14);
 });
 
 test("forkable source ignores dependencies installed after checkout", async (context) => {
@@ -139,7 +139,7 @@ test("deploy package contains runtime and generated library only", async (contex
 
   // Then: no development-only file is present.
   assert.deepEqual(await allFiles(output), [
-    "config.js", "data/demo.js", "index.html", "js/app.js", "library/catalog.json", "library/originals/manual.pdf",
+    "404.html", "config.js", "data/demo.js", "index.html", "js/app.js", "library/catalog.json", "library/originals/manual.pdf",
     "library/search-index.json", "styles/app.css", "vendor/runtime/app.wasm"
   ]);
 });

@@ -4,9 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertNoDisguisedDocument } from "./release-signature.mjs";
 
-const sourceFiles = new Set([".gitignore", "DESIGN.md", "README.md", "config.js", "index.html", "package-lock.json", "package.json"]);
+const sourceFiles = new Set([".gitignore", "404.html", "DESIGN.md", "README.md", "config.js", "index.html", "package-lock.json", "package.json"]);
 const sourceRoots = new Set(["data", "js", "scripts", "styles", "tests", "vendor"]);
-const deployFiles = new Set(["_headers", "_redirects", "config.js", "favicon.ico", "index.html"]);
+const deployFiles = new Set(["404.html", "_headers", "_redirects", "config.js", "favicon.ico", "index.html"]);
 const deployRoots = new Set(["data", "js", "library", "styles", "vendor"]);
 const vendorExtensions = new Set([".bcmap", ".css", ".html", ".js", ".mjs", ".pfb", ".svg", ".ttf", ".wasm", ".woff2"]);
 const sourceExtensions = new Map([
