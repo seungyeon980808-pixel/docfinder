@@ -86,7 +86,7 @@ async function loadPublishedCatalog() {
     sourceName: "게시 문서",
     lastSync: snapshot.generatedAt,
     connection: "local",
-    notice: { visible: true, type: "success", title: `게시 문서 ${snapshot.documents.length}개를 불러왔습니다`, copy: "게시된 목록과 검색 색인을 사용합니다." }
+    notice: { visible: false, type: "success", title: `게시 문서 ${snapshot.documents.length}개를 불러왔습니다`, copy: "게시된 목록과 검색 색인을 사용합니다." }
   });
 }
 
@@ -105,7 +105,7 @@ async function loadLocalCatalog() {
     sourceName: catalog.sourceName || "로컬 문서",
     lastSync: catalog.generatedAt,
     connection: "local",
-    notice: { visible: true, type: "success", title: `실제 문서 ${documents.length}개를 불러왔습니다`, copy: "Google Drive 동기화 폴더의 로컬 색인을 사용합니다. 문서가 바뀌면 색인을 다시 생성하세요." }
+    notice: { visible: false, type: "success", title: `실제 문서 ${documents.length}개를 불러왔습니다`, copy: "Google Drive 동기화 폴더의 로컬 색인을 사용합니다. 문서가 바뀌면 색인을 다시 생성하세요." }
   });
   return true;
 }

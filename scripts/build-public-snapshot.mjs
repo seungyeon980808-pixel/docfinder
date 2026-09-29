@@ -155,6 +155,7 @@ async function stageSnapshot(staging, sourceDocuments, corpus, interrupted) {
   for (const relative of runtimeFiles) await copyRegular(path.join(appRoot, relative), path.join(staging, relative));
   await fs.writeFile(path.join(staging, "config.js"), publicConfig(await fs.readFile(path.join(appRoot, "config.js"), "utf8")), { flag: "wx" });
   await fs.writeFile(path.join(staging, "_headers"), [
+    "/*", "  X-Robots-Tag: noindex, nofollow",
     "/library/catalog.json", "  Cache-Control: no-store", "/library/search-index.json", "  Cache-Control: no-store",
     "/library/manifest.json", "  Cache-Control: no-store", "/library/originals/*", "  Cache-Control: public, max-age=31536000, immutable", ""
   ].join("\n"), { flag: "wx" });

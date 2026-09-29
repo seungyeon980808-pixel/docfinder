@@ -63,7 +63,10 @@ export async function renderLocalPdf(viewer, documentItem, getBytes) {
         if (entry.isIntersecting) {
           session.visible.add(entry.target);
           renderPage(session, entry.target);
-        } else session.visible.delete(entry.target);
+        } else {
+          session.visible.delete(entry.target);
+          releasePage(entry.target);
+        }
       }
       session.onScroll();
     }, { root: scrollRoot, rootMargin: "650px 0px" });
@@ -80,6 +83,16 @@ export async function renderLocalPdf(viewer, documentItem, getBytes) {
       status.hidden = true;
     }
   }
+}
+
+function releasePage(pageNode) {
+  if (pageNode.dataset.rendering === "true" || !pageNode.dataset.renderedWidth) return;
+  const canvas = pageNode.querySelector("canvas");
+  if (canvas) {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+  delete pageNode.dataset.renderedWidth;
 }
 
 async function renderPage(session, pageNode) {
@@ -107,6 +120,7 @@ async function renderPage(session, pageNode) {
     if (activeSession === session) pageNode.textContent = `PDF ${pageNode.dataset.pageNumber}쪽을 렌더링하지 못했습니다.`;
   } finally {
     pageNode.dataset.rendering = "false";
-    if (activeSession === session && session.visible.has(pageNode) && pageNode.clientWidth !== width) renderPage(session, pageNode);
+    if (activeSession === session && !session.visible.has(pageNode)) releasePage(pageNode);
+    else if (activeSession === session && pageNode.clientWidth !== width) renderPage(session, pageNode);
   }
 }

@@ -48,7 +48,7 @@ export function renderHwpPreview(viewer, documentItem, getBytes) {
   clearHwpPreview();
   const scrollRoot = document.querySelector("#document-detail");
   const status = document.querySelector("#preview-page-status");
-  const session = { viewer, scrollRoot, status, urls: new Set(), rendered: new Set() };
+  const session = { viewer, scrollRoot, status, urls: new Set(), rendered: new Set(), visible: new Set() };
   activeSession = session;
   const currentGeneration = generation;
   loadQueue = loadQueue.catch(() => {}).then(async () => {
@@ -76,7 +76,15 @@ export function renderHwpPreview(viewer, documentItem, getBytes) {
       };
       scrollRoot.addEventListener("scroll", session.onScroll, { passive: true });
       session.observer = new IntersectionObserver((entries) => {
-        for (const entry of entries) if (entry.isIntersecting) queuePage(session, entry.target, currentGeneration);
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            session.visible.add(entry.target);
+            queuePage(session, entry.target, currentGeneration);
+          } else {
+            session.visible.delete(entry.target);
+            releasePage(session, entry.target);
+          }
+        }
         session.onScroll();
       }, { root: scrollRoot, rootMargin: "650px 0px" });
       session.pages.forEach((page) => session.observer.observe(page));
@@ -91,14 +99,26 @@ export function renderHwpPreview(viewer, documentItem, getBytes) {
   });
 }
 
+function releasePage(session, pageNode) {
+  const image = pageNode.querySelector("img");
+  const url = image?.getAttribute("src");
+  if (!url) return;
+  image.removeAttribute("src");
+  URL.revokeObjectURL(url);
+  session.urls.delete(url);
+  session.rendered.delete(pageNode);
+}
+
 function queuePage(session, pageNode, currentGeneration) {
   if (session.rendered.has(pageNode)) return;
   session.rendered.add(pageNode);
   pageQueue = pageQueue.catch(() => {}).then(async () => {
     if (currentGeneration !== generation || activeSession !== session) return;
+    if (!session.visible.has(pageNode)) { session.rendered.delete(pageNode); return; }
     try {
       const svg = await editor.getPageSvg(Number(pageNode.dataset.pageNumber) - 1);
       if (currentGeneration !== generation || activeSession !== session) return;
+      if (!session.visible.has(pageNode)) { session.rendered.delete(pageNode); return; }
       if (typeof svg !== "string" || !svg.includes("<svg")) throw new Error("원문 페이지가 없습니다.");
       const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
       session.urls.add(url);

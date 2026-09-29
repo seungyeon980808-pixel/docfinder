@@ -46,6 +46,12 @@ function resultPath(documentItem) {
   return segments.join(" / ") || documentItem.folder || "루트 문서";
 }
 
+function folderPath(documentItem) {
+  const segments = String(documentItem.path || "").split(" / ");
+  if (segments.at(-1) === documentItem.name) segments.pop();
+  return segments.join(" / ");
+}
+
 function renderFolders(state) {
   document.querySelector(".folder-panel").hidden = folderEntries(state.documents).length <= 2;
   document.querySelector("#folder-navigation").innerHTML = folderEntries(state.documents).map(([folder, count]) => `
@@ -63,11 +69,16 @@ function renderDocuments(state) {
       : '<div class="empty-state"><strong>일치하는 문서가 없습니다</strong><span>검색 범위나 단어를 바꿔 보세요.</span></div>';
     return;
   }
+  const showFolder = new Set(state.documents.map((item) => item.folder)).size > 1;
+  const matchLabel = (item) => [
+    showFolder ? escapeHtml(item.folder) : "",
+    item.page ? `${item.page}쪽 일치` : state.mode === "content" && state.query && item.excerpt ? "본문 일치" : ""
+  ].filter(Boolean).join(" · ");
   list.innerHTML = state.results.map((item, index) => `
     <div class="document-row${state.selectedId === item.id ? " is-selected" : ""}" data-result-id="${escapeHtml(item.id)}">
       <button class="document-select" type="button" data-document-id="${escapeHtml(item.id)}" aria-current="${state.selectedId === item.id ? "true" : "false"}">
         <span class="result-rank" aria-label="${index + 1}번째 결과">${String(index + 1).padStart(2, "0")}</span>
-        <span class="result-content"><span class="result-topline"><span class="document-name" title="${escapeHtml(item.name)}"><strong><i class="format-label">${escapeHtml(formatOf(item).toUpperCase())}</i>${highlight(item.name, state.mode === "name" ? state.query : "")}${item.isNew ? '<i class="new-label">새 문서</i>' : ""}</strong></span><small class="result-match">${escapeHtml(item.folder)}${item.page ? ` · ${item.page}쪽 일치` : state.mode === "content" && state.query && item.excerpt ? " · 본문 일치" : ""}</small></span>
+        <span class="result-content"><span class="result-topline"><span class="document-name" title="${escapeHtml(item.name)}"><strong><i class="format-label">${escapeHtml(formatOf(item).toUpperCase())}</i>${highlight(item.name, state.mode === "name" ? state.query : "")}${item.isNew ? '<i class="new-label">새 문서</i>' : ""}</strong></span>${matchLabel(item) ? `<small class="result-match">${matchLabel(item)}</small>` : ""}</span>
         <span class="result-subline">${resultPath(item) === item.folder ? "" : `<small class="result-path">${escapeHtml(resultPath(item))}</small>`}<time class="result-date">${formatDate(item.modifiedTime)}</time></span>
         ${state.mode === "content" && state.query && item.excerpt ? `<span class="result-excerpt">${highlight(item.excerpt, state.query)}</span>` : ""}</span>
       </button>
@@ -76,7 +87,7 @@ function renderDocuments(state) {
         <button type="button" data-row-action="original">원문 열기</button>
         <button type="button" data-row-action="link">문서 링크 복사</button>
         <button type="button" data-row-action="edit">${["hwp", "hwpx"].includes(formatOf(item)) ? "RHWP로 편집" : "PDF 편집기에서 열기"}</button>
-        <small>${escapeHtml(item.path || item.folder)}<br>수정일 ${formatDate(item.modifiedTime)} · ${formatSize(item.size)}</small>
+        <small>${folderPath(item) ? `${escapeHtml(folderPath(item))}<br>` : ""}수정일 ${formatDate(item.modifiedTime)} · ${formatSize(item.size)}</small>
       </div></details>
     </div>`).join("");
 }
@@ -119,7 +130,7 @@ function renderDetail(state, getBytes) {
 
 function renderConnection(state) {
   const status = document.querySelector("#connection-status");
-  status.className = `connection-status${state.connection === "connected" ? " is-connected" : state.connection === "error" ? " is-error" : ""}`;
+  status.className = `connection-status${["connected", "local"].includes(state.connection) ? " is-connected" : state.connection === "error" ? " is-error" : ""}`;
   const labels = { demo: "데모 데이터", local: "로컬 색인", connecting: "Drive 연결 중", connected: "Drive 연결됨", error: "연결 확인 필요" };
   status.querySelector("span").textContent = state.publicMode ? state.connection === "error" ? "게시 목록 오류" : "게시 목록" : labels[state.connection] || "Drive 연결 안 됨";
   status.querySelector("#connect-button").textContent = state.connection === "connected" ? "다시 연결" : "Drive 연결";
