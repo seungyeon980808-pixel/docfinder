@@ -92,6 +92,17 @@ test("source inventory includes every locally referenced HWP Studio font", async
   assert.ok(inventory.includes("vendor/rhwp-studio/LICENSE-FONTS"));
 });
 
+test("source env template accepts empty settings and refuses embedded server credentials", async (context) => {
+  const source = await makeReleaseFixture();
+  context.after(() => fs.rm(source, { recursive: true, force: true }));
+  await writeFixture(source, '.env.example', 'GOOGLE_CLIENT_SECRET=\nDATABASE_URL=\nDOCFINDER_ENCRYPTION_KEY=\n');
+  assert.ok((await collectReleaseInventory('source', source)).includes('.env.example'));
+  for (const name of ['GOOGLE_CLIENT_SECRET', 'DATABASE_URL', 'DOCFINDER_ENCRYPTION_KEY', 'POSTGRES_PASSWORD']) {
+    await writeFixture(source, '.env.example', `${name}=fixture-sensitive-value\n`);
+    await assert.rejects(collectReleaseInventory('source', source), /must not contain credentials/);
+  }
+});
+
 test("source package contains only forkable source allowlist entries", async (context) => {
   // Given: app source mixed with private, generated, dependency, orchestration, and secret files.
   const source = await makeReleaseFixture();

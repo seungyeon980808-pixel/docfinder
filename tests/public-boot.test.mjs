@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import * as buildConfig from "../config.js";
+import * as buildConfig from "../config.js?v=compact-live-1";
 import { buildPdfEditorUrl } from "../js/pdf-editor.js";
 import * as boot from "../js/store.js";
 
@@ -63,7 +63,7 @@ function useMemoryStorage(context, entries = {}) {
   });
 }
 
-function runDelayedPublicSearchHarness() {
+function runDelayedPublicSearchHarness(race = false) {
   const appPath = fileURLToPath(new URL("../js/app.js", import.meta.url));
   const source = String.raw`
     const assert = require("node:assert/strict");
@@ -132,6 +132,7 @@ function runDelayedPublicSearchHarness() {
       location,
       navigator: { clipboard: { async writeText() {} } },
       setTimeout,
+      clearTimeout,
       window: { addEventListener() {}, open() {} }
     });
     context.globalThis = context;
@@ -182,7 +183,7 @@ function runDelayedPublicSearchHarness() {
       };
     }
     const moduleExports = {
-      "../config.js": {
+      "../config.js?v=compact-live-1": {
         BUILD_PROFILE: { profile: "public", settings: {} },
         DEFAULT_CONFIG: defaultConfig,
         resolvePublicSnapshotUrls: () => ({ catalog: "catalog", searchIndex: "index" })
@@ -196,18 +197,21 @@ function runDelayedPublicSearchHarness() {
         scanDriveFolder: async () => ({ rootName: "", documents: [] }),
         searchDriveContent: async () => []
       },
-      "./hwp-index.js?v=verification-2": { searchHwpContent: async () => ({ matches: [], failures: [] }) },
-      "./local-index.js?v=verification-2": {
-        searchLocalIndex: (documents, entries, query) => {
+      "./hwp-index.js?v=phrase-map-2": { searchHwpContent: async () => ({ matches: [], failures: [] }) },
+      "./search-client.js?v=phrase-map-2": {
+        createSearchClient: () => ({ reset() {}, search: async (documents, entries, query) => {
+          if (process.env.DOCFINDER_SEARCH_RACE) await new Promise((resolve) => setTimeout(resolve, 25));
           const terms = query.toLowerCase().trim().split(/\\s+/u);
           const ids = new Set(entries.filter((entry) => terms.every((term) => entry.text.toLowerCase().includes(term))).map((entry) => entry.id));
           return documents.filter((item) => ids.has(item.id));
-        }
+        } })
       },
+      "./index-health.js?v=phrase-map-2": { summarizeIndex: () => ({}) },
+      "./shared-library.js?v=sharing-1": { createSharedLibrary() { throw new Error('Public profile must not create a shared library session'); } },
       "./pdf-editor.js": { openPdfEditor() {} },
-      "./render.js?v=width-fit-1": { renderApp() {} },
-      "./rhwp-editor.js": { initRhwpEditor() {}, openRhwpEditor: async () => {} },
-      "./search.js?v=verification-2": {
+      "./render.js?v=phrase-map-2": { renderApp() {} },
+      "./rhwp-editor.js": { destroyRhwpEditor() {}, initRhwpEditor() {}, openRhwpEditor: async () => {} },
+      "./search.js?v=phrase-map-2": {
         documentFormat: () => "pdf",
         filterDocuments: (documents) => documents,
         matchProximity: () => null
@@ -222,6 +226,7 @@ function runDelayedPublicSearchHarness() {
         saveSnapshot() {},
         selectSnapshotDocumentId: (documents) => documents[0]?.id || ""
       },
+      "./preview-cache.js?v=phrase-map-2": { createByteCache: (loader) => loader },
       "./toast.js": { createToast: () => () => {} }
     };
 
@@ -243,11 +248,18 @@ function runDelayedPublicSearchHarness() {
         generatedAt: "2026-09-26T00:00:00.000Z",
         indexEntries: [{ id: documentItem.id, page: 1, text: "alpha beta synthetic" }]
       });
+      let freshSearch;
+      if (process.env.DOCFINDER_SEARCH_RACE) {
+        await new Promise((resolve) => setImmediate(resolve));
+        await listeners.get("#search-input:input")({ target: { value: "gamma" } });
+        freshSearch = listeners.get("#search-form:submit")({ preventDefault() {} });
+      }
       await submitted;
+      if (freshSearch) await freshSearch;
       await new Promise((resolve) => setImmediate(resolve));
 
       assert.deepEqual(requests, [], "public early search must not request a private index");
-      assert.equal(context.__state.contentMatches?.length, 1, "queued early search must complete after public metadata loads");
+      assert.equal(context.__state.contentMatches?.length, process.env.DOCFINDER_SEARCH_RACE ? 0 : 1, "late results must not overwrite a newer query");
       process.stdout.write(JSON.stringify({ requests, matches: context.__state.contentMatches.length }));
     })().catch((error) => {
       process.stderr.write(error.stack + "\\n");
@@ -257,7 +269,7 @@ function runDelayedPublicSearchHarness() {
   return spawnSync(process.execPath, ["--experimental-vm-modules", "-e", source], {
     cwd: fileURLToPath(new URL("..", import.meta.url)),
     encoding: "utf8",
-    env: { ...process.env, DOCFINDER_APP_PATH: appPath, NODE_NO_WARNINGS: "1" }
+    env: { ...process.env, DOCFINDER_APP_PATH: appPath, NODE_NO_WARNINGS: "1", DOCFINDER_SEARCH_RACE: race ? "1" : "" }
   });
 }
 
@@ -312,6 +324,12 @@ test("public content search submitted during delayed snapshot boot waits for the
   // Then: no private fallback is requested and the queued query completes from the public index.
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.deepEqual(JSON.parse(result.stdout), { requests: [], matches: 1 });
+});
+
+test("a delayed old search cannot replace results for a newer query", () => {
+  const result = runDelayedPublicSearchHarness(true);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), { requests: [], matches: 0 });
 });
 
 test("public snapshot URLs stay below root and nested deployment paths", () => {

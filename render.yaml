@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: docfinder-share
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4175"
+      - key: DOCFINDER_DATA_DIR
+        value: /tmp/docfinder
+      - key: DOCFINDER_MAX_FILE_MB
+        value: "32"
+      - key: DOCFINDER_INDEX_MEMORY_MB
+        value: "192"
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=192
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: DOCFINDER_ENCRYPTION_KEY
+        sync: false

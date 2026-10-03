@@ -3,12 +3,19 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "pdfjs-dist": "6.3.289"
+    "@electric-sql/pglite": "0.5.8",
+    "google-auth-library": "11.1.0",
+    "pdfjs-dist": "6.3.289",
+    "pg": "8.23.1"
   },
   "scripts": {
+    "start": "node scripts/serve-local.mjs",
+    "start:shared": "node --env-file-if-exists=.env scripts/serve-shared.mjs",
+    "service:install": "node scripts/install-local-service.mjs",
     "test": "node --test tests/*.test.mjs",
     "qa:public": "node tests/public-release-qa.cjs --dist dist",
     "index:local": "node scripts/build-local-index.mjs",
-    "build:public": "node scripts/build-public-snapshot.mjs"
+    "build:public": "node scripts/build-public-snapshot.mjs",
+    "build:personal": "node scripts/build-personal-app.mjs"
   }
 }

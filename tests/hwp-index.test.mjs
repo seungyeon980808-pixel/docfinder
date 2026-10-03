@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { excerptAroundMatch, findBestHwpPage, matchesAllTerms, parseRhwpUnicodeText } from "../js/hwp-index.js";
 
-test("한글 본문 검색은 공백으로 나눈 모든 단어를 포함해야 한다", () => {
-  assert.equal(matchesAllTerms("교외 체험학습 신청과 안전교육", "체험학습 안전"), true);
-  assert.equal(matchesAllTerms("교외 체험학습 신청", "체험학습 안전"), false);
+test("한글 본문 검색은 쉼표로 나눈 모든 단어를 포함해야 한다", () => {
+  assert.equal(matchesAllTerms("교외 체험학습 신청과 안전교육", "체험학습, 안전"), true);
+  assert.equal(matchesAllTerms("교외 체험학습 신청", "체험학습, 안전"), false);
 });
 
 test("본문 발췌는 검색어 주변을 표시한다", () => {

@@ -76,6 +76,6 @@ test("public filename/content fixtures preserve proximity order and mark textles
     { id: documents[1].id, page: 1, text: "alpha words separated across a much longer passage beta" },
     { id: documents[2].id, page: null, text: "\u200b" }
   ];
-  assert.deepEqual(searchLocalIndex(documents, entries, "alpha beta").map(({ id }) => id), [documents[0].id, documents[1].id]);
+  assert.deepEqual(searchLocalIndex(documents, entries, "alpha, beta").map(({ id }) => id), [documents[0].id, documents[1].id]);
   assert.equal(searchLocalIndex(documents, entries, "unavailable-text").length, 0);
 });

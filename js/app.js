@@ -1,20 +1,25 @@
-import { BUILD_PROFILE, DEFAULT_CONFIG, resolvePublicSnapshotUrls } from "../config.js";
+import { BUILD_PROFILE, DEFAULT_CONFIG, resolvePublicSnapshotUrls } from "../config.js?v=compact-live-1";
 import { DEMO_DOCUMENTS } from "../data/demo-documents.js";
 import { createDetailPanelController } from "./detail-panel.js?v=verification-2";
-import { authorizeDrive, downloadDriveFile, DriveError, scanDriveFolder, searchDriveContent } from "./drive-api.js";
-import { searchHwpContent } from "./hwp-index.js?v=verification-2";
-import { searchLocalIndex } from "./local-index.js?v=verification-2";
+import { downloadDriveFile, DriveError } from "./drive-api.js";
+import { createSearchClient } from "./search-client.js?v=phrase-map-2";
+import { summarizeIndex } from "./index-health.js?v=phrase-map-2";
 import { openPdfEditor } from "./pdf-editor.js";
-import { renderApp } from "./render.js?v=width-fit-1";
-import { initRhwpEditor, openRhwpEditor } from "./rhwp-editor.js";
-import { documentFormat, filterDocuments, matchProximity } from "./search.js?v=verification-2";
-import { compareSnapshot, createStore, loadPublicSnapshot, loadSettings, loadSnapshot, saveSettings, saveSnapshot, selectSnapshotDocumentId } from "./store.js";
+import { renderApp } from "./render.js?v=phrase-map-2";
+import { destroyRhwpEditor, initRhwpEditor, openRhwpEditor } from "./rhwp-editor.js";
+import { documentFormat, filterDocuments, matchProximity } from "./search.js?v=phrase-map-2";
+import { createStore, loadPublicSnapshot, loadSettings, saveSettings, selectSnapshotDocumentId } from "./store.js";
 import { createToast } from "./toast.js";
+import { createByteCache } from "./preview-cache.js?v=phrase-map-2";
+import { createSharedLibrary } from "./shared-library.js?v=sharing-1";
 
 const forceDemo = new URLSearchParams(location.search).has("demo");
 const publicMode = BUILD_PROFILE.profile === "public";
-document.documentElement.dataset.profile = publicMode ? "public" : "private";
-const settings = loadSettings(DEFAULT_CONFIG, { ...BUILD_PROFILE, forceDemo: forceDemo && !publicMode });
+const sharedMode = BUILD_PROFILE.profile === "shared";
+const localProfile = BUILD_PROFILE.profile === "local" && !new URLSearchParams(location.search).has("personal");
+const personalMode = !publicMode && !localProfile && !sharedMode;
+document.documentElement.dataset.profile = sharedMode ? "shared" : localProfile ? "local" : publicMode ? "public" : "private";
+const settings = localProfile || sharedMode ? { ...DEFAULT_CONFIG, demoMode: false } : { ...loadSettings(DEFAULT_CONFIG, BUILD_PROFILE), demoMode: forceDemo && !publicMode };
 const initialDocuments = settings.demoMode && !publicMode ? [...DEMO_DOCUMENTS] : [];
 const newestDocumentId = (documents) => [...documents].sort((left, right) => String(right.modifiedTime).localeCompare(String(left.modifiedTime)))[0]?.id || "";
 const initialSelectedId = newestDocumentId(initialDocuments);
@@ -22,8 +27,13 @@ const store = createStore({
   settings,
   documents: initialDocuments,
   contentMatches: null,
-  localMode: false,
+  localMode: localProfile,
+  autoIndex: localProfile,
   publicMode,
+  sharedMode,
+  personalMode,
+  personalBusy: false,
+  driveConnected: false,
   results: initialDocuments,
   folder: "전체",
   query: "",
@@ -31,7 +41,7 @@ const store = createStore({
   selectedId: initialSelectedId,
   accessToken: "",
   connection: publicMode ? "connecting" : settings.demoMode ? "demo" : "idle",
-  sourceName: publicMode ? "게시 문서" : settings.demoMode ? "데모 자료" : "Google Drive",
+  sourceName: publicMode ? "게시 문서" : settings.demoMode ? "데모 자료" : "내 자료",
   lastSync: settings.demoMode ? new Date().toISOString() : "",
   searching: false,
   searchProgress: "",
@@ -39,14 +49,29 @@ const store = createStore({
     ? { visible: true, type: "success", title: "게시 문서를 불러오는 중입니다", copy: "게시된 문서 목록과 검색 색인을 확인하고 있습니다." }
     : settings.demoMode
     ? { visible: true, type: "success", title: `데모 문서 ${initialDocuments.length}개를 불러왔습니다`, copy: "폴더와 파일명을 기준으로 분류합니다." }
-    : { visible: true, type: "success", title: "Google Drive를 연결하세요", copy: "설정에 OAuth 클라이언트 ID와 공유할 루트 폴더를 입력하면 문서를 자동으로 불러옵니다." }
+    : { visible: false, type: "success", title: "내 자료를 연결하세요", copy: "Drive에 업로드하거나 이 컴퓨터의 파일을 불러오면 자동으로 색인합니다." }
 });
 
 const detailPanel = createDetailPanelController();
 const showToast = createToast();
+const searchClient = createSearchClient();
+let searchSequence = 0;
+let searchTimer;
+let localRevision = "";
+let sharedSignature = "";
+const sharedController = sharedMode ? createSharedLibrary({ notify: showToast, onChange(snapshot) {
+  const previous = store.get();
+  if (previous.sharedUser?.id !== snapshot.sharedUser?.id || previous.libraryId !== snapshot.libraryId) destroyRhwpEditor();
+  const signature = JSON.stringify([snapshot.sharedUser?.id, snapshot.libraryId, snapshot.documents.map((item) => [item.id, item.version, item.indexStatus])]);
+  const changed = signature !== sharedSignature;
+  if (changed) { sharedSignature = signature; searchSequence++; }
+  updateView({ ...snapshot, ...(changed ? { contentMatches: null, selectedId: selectSnapshotDocumentId(snapshot.documents, store.get().libraryId === snapshot.libraryId ? store.get().selectedId || deepLinkedId : deepLinkedId), searching: false } : {}),
+    notice: { visible: Boolean(snapshot.sharedAccessError), type: "error", title: "문서함 접근을 확인하세요", copy: snapshot.sharedAccessError || "" } });
+  if (changed && snapshot.documents.length && store.get().query.trim()) { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 0); }
+} }) : null;
 
 function visibleDocuments(state) {
-  const externalContent = state.mode === "content" && (state.localMode || state.publicMode || !state.settings.demoMode);
+  const externalContent = (state.mode === "content" || state.sharedMode) && (state.localMode || state.publicMode || state.personalMode || state.sharedMode || !state.settings.demoMode);
   if (externalContent && state.query.trim() && !state.contentMatches) return [];
   const source = externalContent && state.contentMatches ? state.contentMatches : state.documents;
   const query = externalContent ? "" : state.query;
@@ -61,8 +86,9 @@ function visibleDocuments(state) {
     const rightMatch = rightName || matchProximity(`${right.name} ${right.path}`, state.query);
     return (leftMatch?.distance ?? Infinity) - (rightMatch?.distance ?? Infinity) || newestFirst(left, right);
   });
-  if (state.localMode || state.publicMode || state.settings.demoMode) return [...filtered].sort((left, right) =>
-    (left.matchDistance ?? matchProximity(left.excerpt, state.query)?.distance ?? Infinity)
+  if (state.localMode || state.publicMode || state.personalMode || state.settings.demoMode) return [...filtered].sort((left, right) =>
+    (left.matchQuality ?? 2) - (right.matchQuality ?? 2)
+    || (left.matchDistance ?? matchProximity(left.excerpt, state.query)?.distance ?? Infinity)
     - (right.matchDistance ?? matchProximity(right.excerpt, state.query)?.distance ?? Infinity)
     || newestFirst(left, right));
   return [...filtered].sort(newestFirst);
@@ -70,6 +96,37 @@ function visibleDocuments(state) {
 
 let localIndexPromise;
 let publicBootPromise;
+let personalController;
+let personalControllerPromise;
+let personalIndex = { version: 1, entries: [] };
+let personalSignature = "";
+async function getPersonalLibrary() {
+  personalControllerPromise ||= import("./personal-library.js?v=drive-upload-1").then(({ createPersonalLibrary }) => {
+    personalController = createPersonalLibrary({ onChange(snapshot) {
+      const signature = JSON.stringify([snapshot.libraryId, snapshot.documents.map((item) => [item.id, item.modifiedTime, item.indexStatus]), snapshot.entries.length]);
+      const changed = signature !== personalSignature;
+      if (changed) {
+        personalSignature = signature;
+        personalIndex = { version: 1, entries: snapshot.entries };
+        searchClient.reset(); searchSequence++;
+      }
+      const indexStats = changed ? summarizeIndex(snapshot.documents, snapshot.entries) : store.get().indexStats;
+      updateView({ documents: snapshot.documents, sourceName: snapshot.sourceName, libraryId: snapshot.libraryId,
+        personalBusy: snapshot.busy, personalProgress: snapshot.progress, driveConnected: snapshot.connected,
+        connection: snapshot.error || indexStats?.failures ? "error" : snapshot.connected ? "connected" : snapshot.documents.length ? "local" : "idle",
+        indexStats,
+        ...(changed ? { contentMatches: null } : {}),
+        notice: { visible: Boolean(snapshot.error || !snapshot.durable && snapshot.documents.length), type: snapshot.error ? "error" : "success",
+          title: snapshot.error ? "연결 또는 업로드를 확인하세요" : "현재 탭에서 사용 중입니다",
+          copy: snapshot.error || "브라우저 저장 공간을 사용할 수 없습니다. 탭을 닫으면 파일을 다시 불러와야 합니다." }
+      });
+      const state = store.get();
+      if (changed && state.mode === "content" && state.query.trim()) { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 0); }
+    } });
+    return personalController;
+  }).catch((error) => { personalControllerPromise = undefined; throw error; });
+  return personalControllerPromise;
+}
 const deepLinkedId = location.hash.startsWith("#doc=") ? location.hash.slice(5) : "";
 const publicSnapshotUrls = resolvePublicSnapshotUrls();
 
@@ -81,6 +138,7 @@ async function loadPublishedCatalog() {
   updateView({
     publicMode: true,
     documents: snapshot.documents,
+    indexStats: summarizeIndex(snapshot.documents, snapshot.indexEntries),
     contentMatches: null,
     selectedId,
     sourceName: "게시 문서",
@@ -97,15 +155,25 @@ async function loadLocalCatalog() {
   if (catalog.version !== 1 || !Array.isArray(catalog.documents)) throw new Error("로컬 문서 목록 형식이 올바르지 않습니다.");
   const documents = catalog.documents;
   localIndexPromise = undefined;
+  searchClient.reset();
+  localRevision = catalog.generatedAt;
+  const current = store.get();
+  const byId = new Map(documents.map((item) => [item.id, item]));
+  const retainedMatches = current.contentMatches?.flatMap((match) => {
+    const item = byId.get(match.id);
+    return item ? [{ ...match, ...item, page: match.page, heading: match.heading,
+      excerpt: match.excerpt, matchedPages: match.matchedPages }] : [];
+  }) ?? null;
   updateView({
     localMode: true,
     documents,
-    contentMatches: null,
-    selectedId: documents.some((item) => item.id === deepLinkedId) ? deepLinkedId : newestDocumentId(documents),
+    indexStats: undefined,
+    contentMatches: retainedMatches,
+    selectedId: selectSnapshotDocumentId(documents, current.selectedId || deepLinkedId),
     sourceName: catalog.sourceName || "로컬 문서",
     lastSync: catalog.generatedAt,
     connection: "local",
-    notice: { visible: false, type: "success", title: `실제 문서 ${documents.length}개를 불러왔습니다`, copy: "Google Drive 동기화 폴더의 로컬 색인을 사용합니다. 문서가 바뀌면 색인을 다시 생성하세요." }
+    notice: { visible: false, type: "success", title: `실제 문서 ${documents.length}개를 불러왔습니다`, copy: localProfile ? "문서 폴더의 추가·수정·삭제가 자동으로 반영됩니다." : "로컬 폴더의 색인을 사용합니다." }
   });
   return true;
 }
@@ -124,7 +192,6 @@ function openSettings() {
   document.querySelector("#setting-app-name").value = state.settings.appName;
   document.querySelector("#setting-organization").value = state.settings.organization;
   document.querySelector("#setting-client-id").value = state.settings.googleClientId;
-  document.querySelector("#setting-folder-id").value = state.settings.rootFolderId;
   document.querySelector("#setting-pdf-editor-url").value = state.settings.pdfEditorUrl || "";
   document.querySelector("#setting-demo-mode").checked = state.settings.demoMode;
   document.querySelector("#settings-dialog").showModal();
@@ -132,83 +199,60 @@ function openSettings() {
 
 async function syncDrive() {
   const state = store.get();
-  if (state.publicMode) {
-    try { await loadPublishedCatalog(); }
-    catch { showToast("게시 문서 목록을 불러오지 못했습니다."); }
-    return;
-  }
-  if (state.localMode) {
-    try { await loadLocalCatalog(); }
-    catch { showToast("로컬 색인을 불러오지 못했습니다."); }
-    return;
-  }
-  if (state.settings.demoMode) {
-    const documents = [...DEMO_DOCUMENTS];
-    updateView({ documents, selectedId: newestDocumentId(documents), lastSync: new Date().toISOString(), notice: { visible: true, type: "success", title: "데모 문서를 다시 불러왔습니다", copy: "실제 문서는 설정에서 Google Drive를 연결하면 자동으로 반영됩니다." } });
-    return;
-  }
-  if (!state.accessToken) return connectDrive();
-  updateView({ connection: "connecting", searching: true });
   try {
-    const { rootName, documents } = await scanDriveFolder(state.accessToken, state.settings.rootFolderId);
-    const previous = loadSnapshot();
-    const changes = compareSnapshot(documents, previous);
-    const added = new Set(changes.added);
-    const current = documents.map((documentItem) => ({ ...documentItem, isNew: added.has(documentItem.id) }));
-    saveSnapshot(documents);
-    const changeCount = changes.added.length + changes.updated.length + changes.removed.length;
-    updateView({
-      documents: current,
-      contentMatches: null,
-      sourceName: rootName,
-      lastSync: new Date().toISOString(),
-      connection: "connected",
-      searching: false,
-      notice: changeCount
-        ? { visible: true, type: "success", title: `변경된 문서 ${changeCount}개를 자동 반영했습니다`, copy: `신규 ${changes.added.length}개 · 수정 ${changes.updated.length}개 · 삭제 ${changes.removed.length}개` }
-        : { visible: true, type: "success", title: "모든 문서가 최신 상태입니다", copy: "Drive 폴더와 문서 목록을 확인했습니다." }
-    });
-  } catch (error) {
-    const message = error instanceof DriveError ? error.message : "Drive 문서를 불러오지 못했습니다.";
-    updateView({ connection: "error", searching: false, notice: { visible: true, type: "error", title: "동기화하지 못했습니다", copy: message } });
-  }
+    if (state.sharedMode) await sharedController.sync();
+    else if (state.publicMode) await loadPublishedCatalog();
+    else if (state.localMode) { await loadLocalCatalog(); await runSearch(); }
+    else await (await getPersonalLibrary()).sync();
+  } catch (error) { showToast(error.message || "문서 목록을 불러오지 못했습니다."); }
 }
 
 async function connectDrive() {
   const state = store.get();
-  if (!state.settings.googleClientId || !state.settings.rootFolderId) {
+  if (state.sharedMode) { await sharedController.connect(); return; }
+  if (!state.settings.googleClientId) {
     openSettings();
-    showToast("먼저 Google Drive 연결 정보를 입력하세요.");
+    showToast("운영용 Google 클라이언트 ID를 설정하세요.");
     return;
   }
-  updateView({ connection: "connecting" });
   try {
-    const accessToken = await authorizeDrive(state.settings.googleClientId);
-    updateView({ accessToken, connection: "connected" });
-    await syncDrive();
-  } catch (error) {
-    const message = error instanceof DriveError ? error.message : "Google 계정 연결에 실패했습니다.";
-    updateView({ connection: "error", notice: { visible: true, type: "error", title: "Drive에 연결하지 못했습니다", copy: message } });
+    const controller = personalController || await getPersonalLibrary();
+    await controller.connect(state.settings.googleClientId);
   }
+  catch (error) { showToast(error.message || "Google Drive를 연결하지 못했습니다."); }
 }
 
 async function runSearch() {
+  clearTimeout(searchTimer);
+  const request = ++searchSequence;
   const state = store.get();
-  if ((state.localMode || state.publicMode) && state.mode === "content" && state.query.trim()) {
+  const isCurrent = () => request === searchSequence && store.get().query === state.query && store.get().mode === state.mode;
+  if (state.sharedMode) {
+    if (!state.query.trim()) { updateView({ contentMatches: null }); return; }
+    updateView({ searching: true, searchProgress: "검색 중" });
+    try { const matches = await sharedController.search(state.query, state.mode); if (isCurrent()) updateView({ contentMatches: matches, searching: false, searchProgress: "" }); }
+    catch (error) { if (isCurrent()) { updateView({ searching: false, contentMatches: [], searchProgress: "" }); showToast(error.message); await sharedController.refresh(); } }
+    return;
+  }
+  if ((state.localMode || state.publicMode || state.personalMode) && state.mode === "content" && state.query.trim()) {
     updateView({ searching: true, searchProgress: "색인 검색 중" });
     try {
       if (state.publicMode) await publicBootPromise;
+      else if (state.personalMode) { await getPersonalLibrary(); localIndexPromise = Promise.resolve(personalIndex); }
       else {
-        localIndexPromise ||= fetch("private/search-index.json", { cache: "no-store" }).then((response) => {
+        localIndexPromise ||= fetch(`private/search-index.json${localProfile ? `?revision=${encodeURIComponent(localRevision)}` : ""}`, { cache: "no-store" }).then((response) => {
           if (!response.ok) throw new Error("로컬 색인을 찾을 수 없습니다.");
           return response.json();
         });
       }
       const index = await localIndexPromise;
+      if (!isCurrent()) return;
       if (index.version !== 1 || !Array.isArray(index.entries)) throw new Error("로컬 색인 형식이 올바르지 않습니다.");
       const documents = state.publicMode ? store.get().documents : state.documents;
-      updateView({ contentMatches: searchLocalIndex(documents, index.entries, state.query), searching: false, searchProgress: "" });
+      const matches = await searchClient.search(documents, index.entries, state.query);
+      if (isCurrent()) updateView({ contentMatches: matches, searching: false, searchProgress: "", indexStats: summarizeIndex(documents, index.entries) });
     } catch {
+      if (!isCurrent()) return;
       localIndexPromise = undefined;
       updateView({ searching: false, searchProgress: "", notice: { visible: true, type: "error", title: state.publicMode ? "게시된 본문 검색에 실패했습니다" : "로컬 본문 검색에 실패했습니다", copy: state.publicMode ? "페이지를 새로고침한 뒤 다시 시도하세요." : "색인을 다시 생성한 뒤 새로고침하세요." } });
     }
@@ -218,42 +262,20 @@ async function runSearch() {
     updateView({ contentMatches: null });
     return;
   }
-  if (!state.accessToken) {
-    showToast("문서 내용 검색을 사용하려면 Drive를 연결하세요.");
-    await connectDrive();
-    return;
-  }
-  updateView({ searching: true, searchProgress: "" });
-  try {
-    const pdfSearch = searchDriveContent(state.accessToken, state.query, state.documents);
-    const hwpSearch = searchHwpContent(
-      state.documents,
-      state.query,
-      getDocumentBytes,
-      ({ current, total }) => updateView({ searchProgress: `한글 문서 색인 ${current}/${total}` })
-    );
-    const [pdfMatches, hwpResult] = await Promise.all([pdfSearch, hwpSearch]);
-    const matches = [...pdfMatches, ...hwpResult.matches];
-    updateView({
-      contentMatches: matches,
-      searching: false,
-      searchProgress: "",
-      ...(hwpResult.failures.length ? {
-        notice: {
-          visible: true,
-          type: "error",
-          title: `한글 문서 ${hwpResult.failures.length}개를 색인하지 못했습니다`,
-          copy: "암호 문서이거나 RHWP가 아직 지원하지 않는 형식일 수 있습니다. 파일명 검색과 Drive 원문은 계속 사용할 수 있습니다."
-        }
-      } : {})
-    });
-  } catch (error) {
-    const message = error instanceof DriveError ? error.message : "본문 검색에 실패했습니다.";
-    updateView({ searching: false, searchProgress: "", notice: { visible: true, type: "error", title: "본문을 검색하지 못했습니다", copy: message } });
-  }
+  updateView({ contentMatches: null });
 }
 
+const cachedDocumentBytes = createByteCache(loadDocumentBytes);
+
 async function getDocumentBytes(documentItem) {
+  if (store.get().sharedMode) return sharedController.getBytes(documentItem);
+  if (documentItem.libraryId) return (await getPersonalLibrary()).getBytes(documentItem);
+  // Drive authorization is checked on every read, including cached originals.
+  if (documentItem.source === "drive") return loadDocumentBytes(documentItem);
+  return cachedDocumentBytes(documentItem);
+}
+
+async function loadDocumentBytes(documentItem) {
   if (documentItem.source === "drive") {
     const accessToken = store.get().accessToken;
     if (!accessToken) throw new DriveError("한글 원문을 열려면 Google Drive를 다시 연결하세요.");
@@ -287,16 +309,29 @@ async function downloadDocument(documentItem) {
 }
 
 function openDocumentOriginal(documentItem) {
+  if (documentItem.source === "shared") return downloadDocument(documentItem);
+  if (documentItem.source === "browser") return downloadDocument(documentItem);
   const url = documentItem.sourceUrl || documentItem.downloadUrl || documentItem.webViewLink || documentItem.previewUrl;
   if (!url) { showToast("데모 문서에는 원본 링크가 없습니다."); return; }
   window.open(url, "_blank", "noopener");
 }
 
 async function runRowAction(action, documentItem) {
+  if (store.get().sharedMode && ["reindex", "edit", "trash"].includes(action) && store.get().sharedLibrary?.role !== "owner") return;
+  if (action === "trash") {
+    if (!confirm(`${documentItem.name}을 Drive 휴지통으로 이동할까요? 문서함에서도 제거됩니다.`)) return;
+    try { await sharedController.trash(documentItem); showToast("Drive 휴지통으로 이동했습니다."); } catch (error) { showToast(error.message); }
+    return;
+  }
+  if (action === "reindex") {
+    try { if (store.get().sharedMode) await sharedController.retry(documentItem); else await (await getPersonalLibrary()).retry(documentItem); }
+    catch (error) { showToast(error.message || "색인을 다시 시도하지 못했습니다."); }
+    return;
+  }
   if (action === "download") return downloadDocument(documentItem);
   if (action === "original") return openDocumentOriginal(documentItem);
   if (action === "link") {
-    const url = new URL(location.href);
+    const url = store.get().sharedMode ? new URL(`/s/${store.get().sharedLibrary.share_id}`, location.origin) : new URL(location.href);
     url.hash = `doc=${documentItem.id}`;
     await navigator.clipboard.writeText(url.href);
     showToast("문서 링크를 복사했습니다.");
@@ -329,9 +364,24 @@ document.addEventListener("click", async (event) => {
   }
   if (event.target.closest("#settings-button")) openSettings();
   if (event.target.closest("#connect-button")) await connectDrive();
+  if (event.target.closest('[data-personal-action="connect"]')) await connectDrive();
+  if (event.target.closest("#upload-button")) document.querySelector("#drive-upload-input").click();
+  if (event.target.closest('[data-personal-action="local"]') || event.target.closest("#import-local-button")) document.querySelector("#local-library-input").click();
+  if (event.target.closest("#disconnect-button")) {
+    try { if (store.get().sharedMode) await sharedController.disconnect(); else (await getPersonalLibrary()).disconnect(); }
+    catch (error) { showToast(error.message); }
+  }
+  if (event.target.closest("#restore-local-button")) {
+    try { await (await getPersonalLibrary()).restoreLocal(); }
+    catch (error) { showToast(error.message || "저장한 문서를 불러오지 못했습니다."); }
+  }
   if (event.target.closest("#sync-button") || event.target.closest("#refresh-button")) await syncDrive();
   if (event.target.closest("#dismiss-notice")) updateView((state) => ({ notice: { ...state.notice, visible: false } }));
-  if (event.target.closest("#clear-search")) updateView({ query: "", folder: "전체", contentMatches: null });
+  if (event.target.closest("#clear-search")) {
+    searchSequence += 1;
+    clearTimeout(searchTimer);
+    updateView({ query: "", folder: "전체", contentMatches: null, searching: false, searchProgress: "" });
+  }
   if (event.target.closest("#detail-back")) detailPanel.close();
   if (event.target.closest("#local-hwp-button")) document.querySelector("#local-hwp-input").click();
 });
@@ -358,8 +408,27 @@ document.querySelector(".document-table").addEventListener("scroll", () => {
 window.addEventListener("resize", () => {
   document.querySelectorAll(".result-actions[open]").forEach((actions) => { actions.open = false; });
 });
-document.querySelector("#search-input").addEventListener("input", (event) => { updateView({ query: event.target.value, contentMatches: null }); });
-document.querySelector("#search-mode").addEventListener("change", (event) => { updateView({ mode: event.target.value, contentMatches: null }); });
+function queueSearch(patch) {
+  searchSequence += 1;
+  clearTimeout(searchTimer);
+  updateView({ ...patch, contentMatches: null, searching: false, searchProgress: "" });
+  const state = store.get();
+  if ((state.sharedMode || (state.localMode || state.publicMode || state.personalMode) && state.mode === "content") && state.query.trim()) searchTimer = setTimeout(runSearch, 180);
+}
+let composingQuery = false;
+document.querySelector("#search-input").addEventListener("compositionstart", () => {
+  composingQuery = true;
+  searchSequence += 1;
+  clearTimeout(searchTimer);
+});
+document.querySelector("#search-input").addEventListener("compositionend", (event) => {
+  composingQuery = false;
+  queueSearch({ query: event.target.value });
+});
+document.querySelector("#search-input").addEventListener("input", (event) => {
+  if (!composingQuery && !event.isComposing) queueSearch({ query: event.target.value });
+});
+document.querySelector("#search-mode").addEventListener("change", (event) => { queueSearch({ mode: event.target.value }); });
 document.querySelector("#local-hwp-input").addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
   event.target.value = "";
@@ -371,24 +440,31 @@ document.querySelector("#local-hwp-input").addEventListener("change", async (eve
   }
   await openRhwpEditor({ id: `local-${Date.now()}`, name: file.name, format, source: "local", localFile: file }, getDocumentBytes);
 });
+for (const [selector, action] of [["#drive-upload-input", "upload"], ["#local-library-input", "importLocal"]]) {
+  document.querySelector(selector).addEventListener("change", async (event) => {
+    const files = [...event.target.files || []];
+    event.target.value = "";
+    if (!files.length) return;
+    try { if (store.get().sharedMode && action === "upload") await sharedController.upload(files); else await (await getPersonalLibrary())[action](files); }
+    catch (error) { showToast(error.message || "파일을 처리하지 못했습니다."); }
+  });
+}
 document.querySelector("#settings-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const nextSettings = {
     appName: document.querySelector("#setting-app-name").value.trim(),
     organization: document.querySelector("#setting-organization").value.trim(),
     googleClientId: document.querySelector("#setting-client-id").value.trim(),
-    rootFolderId: document.querySelector("#setting-folder-id").value.trim(),
+    rootFolderId: "",
     pdfEditorUrl: document.querySelector("#setting-pdf-editor-url").value.trim(),
-    demoMode: document.querySelector("#setting-demo-mode").checked
+    demoMode: false
   };
+  personalController?.disconnect();
   saveSettings(nextSettings);
   const documents = nextSettings.demoMode ? [...DEMO_DOCUMENTS] : [];
   updateView({ settings: nextSettings, localMode: false, documents, contentMatches: null, accessToken: "", connection: nextSettings.demoMode ? "demo" : "idle", sourceName: nextSettings.demoMode ? "데모 자료" : "Google Drive", selectedId: newestDocumentId(documents) });
   document.querySelector("#settings-dialog").close();
   showToast("설정을 저장했습니다.");
-  if (!forceDemo && nextSettings.demoMode && !nextSettings.googleClientId && ["localhost", "127.0.0.1"].includes(location.hostname)) {
-    loadLocalCatalog().catch(() => showToast("로컬 문서 목록을 불러오지 못했습니다."));
-  }
 });
 document.querySelectorAll(".dialog-close, .dialog-cancel").forEach((button) => button.addEventListener("click", () => document.querySelector("#settings-dialog").close()));
 document.addEventListener("keydown", (event) => {
@@ -400,12 +476,42 @@ store.subscribe((state) => renderApp(state, getDocumentBytes));
 initRhwpEditor();
 if (deepLinkedId && initialDocuments.some((documentItem) => documentItem.id === deepLinkedId)) updateView({ selectedId: deepLinkedId });
 else updateView({});
-if (publicMode) {
+if (sharedMode) {
+  sharedController.start().catch((error) => showToast(error.message || "공유 문서함을 준비하지 못했습니다."));
+} else if (publicMode) {
   publicBootPromise = loadPublishedCatalog();
   publicBootPromise.catch(() => updateView({
     connection: "error",
     notice: { visible: true, type: "error", title: "게시 문서를 불러오지 못했습니다", copy: "게시된 목록과 검색 색인을 확인한 뒤 새로고침하세요." }
   }));
-} else if (!forceDemo && settings.demoMode && !settings.googleClientId && ["localhost", "127.0.0.1"].includes(location.hostname)) {
+} else if (localProfile) {
   loadLocalCatalog().catch(() => showToast("로컬 문서 목록을 불러오지 못했습니다."));
+} else if (personalMode) {
+  // Preload before the first click so opening Google's popup stays synchronous.
+  getPersonalLibrary().catch(() => showToast("문서함을 준비하지 못했습니다. 새로고침하세요."));
+}
+
+if (localProfile) {
+  let polling = false;
+  async function refreshLocalIndex() {
+    if (polling || document.hidden) return;
+    polling = true;
+    try {
+      const response = await fetch("api/index-status", { cache: "no-store" });
+      if (!response.ok) throw new Error("Local server unavailable");
+      const status = await response.json();
+      const connection = status.phase === "indexing" ? "indexing" : status.phase === "error" ? "error" : "local";
+      if (status.revision && status.revision !== localRevision) {
+        searchSequence += 1;
+        await loadLocalCatalog();
+        await runSearch();
+      }
+      if (store.get().connection !== connection || store.get().indexMessage !== status.message
+        || JSON.stringify(store.get().indexStats) !== JSON.stringify(status.stats)) updateView({ connection, indexMessage: status.message, indexStats: status.stats });
+    } catch {
+      if (store.get().connection !== "error") updateView({ connection: "error", indexMessage: "로컬 서버 연결을 확인하세요." });
+    } finally { polling = false; }
+  }
+  setInterval(refreshLocalIndex, 2000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshLocalIndex(); });
 }

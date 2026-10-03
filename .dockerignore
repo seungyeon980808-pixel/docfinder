@@ -1,0 +1,15 @@
+**
+!package.json
+!package-lock.json
+!Dockerfile
+!config.js
+!index.html
+!404.html
+!scripts/
+!scripts/**
+!js/
+!js/**
+!vendor/
+!vendor/**
+!styles/
+!styles/**

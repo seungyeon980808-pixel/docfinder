@@ -1,10 +1,10 @@
 export const DEFAULT_CONFIG = Object.freeze({
   appName: "DocFinder",
-  organization: "학교 업무 자료",
+  organization: "내 문서함",
   googleClientId: "",
   rootFolderId: "",
   pdfEditorUrl: "",
-  demoMode: true
+  demoMode: false
 });
 
 export const BUILD_PROFILE = Object.freeze({

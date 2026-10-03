@@ -1,0 +1,35 @@
+services:
+  database:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_USER: docfinder
+      POSTGRES_DB: docfinder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docfinder -d docfinder"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  app:
+    build: .
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://docfinder:${POSTGRES_PASSWORD}@database:5432/docfinder
+      DOCFINDER_ORIGIN: ${DOCFINDER_ORIGIN:?Set HTTPS DOCFINDER_ORIGIN}
+      DOCFINDER_ENCRYPTION_KEY: ${DOCFINDER_ENCRYPTION_KEY:?Set DOCFINDER_ENCRYPTION_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET}
+    ports:
+      - "127.0.0.1:4175:4175"
+    volumes:
+      - app-data:/data
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  database:
+  app-data:

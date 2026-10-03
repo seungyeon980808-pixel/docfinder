@@ -24,8 +24,8 @@ test("분류 선택은 검색 결과와 함께 적용된다", () => {
 });
 
 test("Drive 본문 검색어는 PDF로 제한하고 따옴표를 안전하게 이스케이프한다", () => {
-  assert.equal(buildDriveContentQuery("교사의 안전"), "mimeType = 'application/pdf' and trashed = false and fullText contains '교사의' and fullText contains '안전'");
-  assert.equal(buildDriveContentQuery("교사's 안내"), "mimeType = 'application/pdf' and trashed = false and fullText contains '교사\\'s' and fullText contains '안내'");
+  assert.equal(buildDriveContentQuery("교사의 안전"), `mimeType = 'application/pdf' and trashed = false and fullText contains '"교사의 안전"'`);
+  assert.equal(buildDriveContentQuery("교사's, 안내"), "mimeType = 'application/pdf' and trashed = false and fullText contains '교사\\'s' and fullText contains '안내'");
 });
 
 test("Drive 폴더 URL과 ID를 모두 설정값으로 받을 수 있다", () => {
@@ -47,7 +47,14 @@ test("로컬 색인이 있는 한글 문서는 본문 검색 대상에 포함된
 });
 
 test("여러 단어 검색은 순서와 관계없이 모두 찾고 가까운 위치를 점수화한다", () => {
-  assert.equal(filterDocuments(documents, { query: "운영 현장체험학습", folder: "전체", mode: "name" })[0].id, "b");
-  assert.ok(matchProximity("안전 교육", "안전 교육").distance < matchProximity("안전 관련 여러 절차를 거친 뒤 교육", "안전 교육").distance);
+  assert.equal(filterDocuments(documents, { query: "운영, 현장체험학습", folder: "전체", mode: "name" })[0].id, "b");
+  assert.ok(matchProximity("안전 교육", "안전, 교육").distance < matchProximity("안전 관련 여러 절차를 거친 뒤 교육", "안전, 교육").distance);
   assert.equal(matchProximity("안전 안내", "안전 교육"), null);
+});
+
+test("한 구절의 공백을 AND 연산으로 해석하지 않는다", () => {
+  assert.equal(matchProximity("학교 폭력 관련 학생 자치 안내", "학교 폭력 학생 자치"), null);
+  assert.ok(matchProximity("학교 폭력 관련 학생 자치 안내", "학교 폭력, 학생 자치"));
+  assert.ok(matchProximity("학생\n자치", "학생 자치"));
+  assert.ok(matchProximity("학생자치", " ,학생 자치,,학생자치,"));
 });

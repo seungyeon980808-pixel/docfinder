@@ -15,6 +15,10 @@
   --success-soft: #e8f3ee;
   --warning: #8a5a16;
   --warning-soft: #fbf3df;
+  --source-match-bg: rgb(255 205 61 / 45%);
+  --source-match-current: #9a5900;
+  --preview-map-width: 28px;
+  --preview-menu-height: min(40dvh, 320px);
   --danger: #a13b32;
   --focus: #0066cc;
   --backdrop: rgb(20 28 36 / 42%);
@@ -36,8 +40,8 @@
   --space-7: 28px;
   --space-8: 32px;
   --space-neg-2: -8px;
-  --topbar-height: 44px;
-  --topbar-mobile-height: 52px;
+  --topbar-height: 36px;
+  --topbar-mobile-height: 40px;
   --control-height: 32px;
   --button-height: 32px;
   --row-height: 68px;
@@ -86,9 +90,9 @@ button, input, select { color: inherit; font: inherit; }
 button, select { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: 0.55; }
 a { color: inherit; }
-button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-width); }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible, summary:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-width); }
 [hidden] { display: none !important; }
-mark { padding: 0 var(--space-1); color: inherit; background: var(--warning-soft); }
+mark { padding: 0 var(--space-1); color: inherit; background: var(--match-bg, var(--warning-soft)); }
 .skip-link { position: fixed; z-index: 100; top: var(--space-2); left: var(--space-2); padding: var(--space-2) var(--space-3); color: var(--white); background: var(--ink); transform: translateY(-160%); }
 .skip-link:focus { transform: translateY(0); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; white-space: nowrap; clip-path: inset(50%); }

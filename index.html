@@ -3,19 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="학교 업무 PDF·HWP·HWPX를 파일명과 본문으로 검색하고 원문을 확인하는 문서함" />
+    <meta name="description" content="내 PDF·HWP·HWPX를 업로드하고 본문으로 검색하는 개인 문서함" />
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#173b5b" />
     <title>DocFinder</title>
-    <link rel="stylesheet" href="styles/base.css?v=width-fit-2" />
-    <link rel="stylesheet" href="styles/app.css?v=width-fit-2" />
-    <link rel="stylesheet" href="styles/responsive.css?v=width-fit-2" />
+    <link rel="stylesheet" href="styles/base.css?v=phrase-map-2" />
+    <link rel="stylesheet" href="styles/app.css?v=phrase-map-2" />
+    <link rel="stylesheet" href="styles/responsive.css?v=phrase-map-2" />
     <script type="module">
-      import { BUILD_PROFILE } from "./config.js";
+      import { BUILD_PROFILE } from "./config.js?v=compact-live-1";
 
       const isPublicProfile = BUILD_PROFILE.profile === "public";
-      document.documentElement.dataset.profile = isPublicProfile ? "public" : "private";
-      if (BUILD_PROFILE.profile !== "public") {
+      const isPersonalPreview = new URLSearchParams(location.search).has("personal") && !isPublicProfile;
+      document.documentElement.dataset.profile = BUILD_PROFILE.profile === "local" && !isPersonalPreview ? "local" : isPublicProfile ? "public" : "private";
+      if (BUILD_PROFILE.profile !== "public" && (BUILD_PROFILE.profile !== "local" || isPersonalPreview)) {
         const googleIdentity = document.createElement("script");
         googleIdentity.src = "https://accounts.google.com/gsi/client";
         googleIdentity.async = true;
@@ -29,21 +30,30 @@
       <header class="topbar">
         <a class="brand" href="./" aria-label="문서함 홈">
           <span class="brand-mark">DocFinder</span>
-          <span id="organization-name">학교 업무 자료</span>
+          <span id="organization-name">내 문서함</span>
         </a>
         <div class="connection-status" id="connection-status">
+          <select id="library-picker" aria-label="문서함 선택" hidden></select>
           <i aria-hidden="true"></i>
           <span>목록 준비 중</span>
           <button type="button" id="connect-button">Drive 연결</button>
+          <button type="button" id="upload-button" hidden disabled>파일 업로드</button>
+          <button type="button" id="share-button" hidden>공유 관리</button>
+          <button type="button" id="google-login-button" hidden>Google 로그인</button>
+          <button type="button" id="shared-logout-button" hidden>로그아웃</button>
           <details class="tool-menu" id="tool-menu">
             <summary>도구</summary>
             <div role="group" aria-label="문서함 작업">
+              <button type="button" id="import-local-button">이 컴퓨터에서 불러오기</button>
+              <button type="button" id="restore-local-button">저장한 로컬 문서 열기</button>
               <button type="button" id="local-hwp-button">내 한글 파일 열기</button>
               <button type="button" id="sync-button">목록 새로고침</button>
               <button type="button" id="settings-button">설정</button>
+              <button type="button" id="disconnect-button" hidden>Drive 연결 해제</button>
             </div>
           </details>
         </div>
+        <details class="index-health" id="index-health" hidden><summary id="index-health-summary">색인 확인</summary><div id="index-health-detail"></div></details>
       </header>
 
       <div class="workspace">
@@ -74,6 +84,8 @@
             </details>
             <div><span id="sort-label">최신 수정순</span><button type="button" id="clear-search">검색 초기화</button></div>
           </div>
+          <p id="personal-progress" class="personal-progress" role="status" aria-live="polite" hidden></p>
+          <section id="pending-invitation" class="pending-invitation" hidden><strong>문서함에 초대받았습니다.</strong><p>참여하면 문서를 검색하고 원문을 열람할 수 있습니다.</p><button type="button" id="accept-invite-button">초대 수락</button></section>
 
           <section class="document-table" aria-label="검색 결과">
             <div id="document-list"></div>
@@ -82,24 +94,36 @@
 
         <aside class="detail-panel" id="detail-panel" aria-label="선택한 문서 상세">
           <button class="mobile-back" type="button" id="detail-back">← 문서 목록</button>
+          <div id="preview-controls" hidden></div>
           <div id="document-detail"></div>
+          <nav id="preview-map" class="preview-location-map" aria-label="문서 전체 검색 위치" hidden></nav>
           <span class="preview-page-status" id="preview-page-status" role="status" hidden></span>
         </aside>
       </div>
     </div>
 
+    <dialog class="sharing-dialog" id="login-dialog" aria-labelledby="login-title">
+      <header><h2 id="login-title">Google 계정으로 로그인</h2><button type="button" class="dialog-close" data-close-shared-dialog aria-label="로그인 창 닫기">×</button></header>
+      <p id="login-message"></p><div id="google-signin-slot"></div>
+    </dialog>
+    <dialog class="sharing-dialog" id="sharing-dialog" aria-labelledby="sharing-title">
+      <header><div><small>초대한 사람만 열람</small><h2 id="sharing-title">공유 관리</h2></div><button type="button" class="dialog-close" data-close-shared-dialog aria-label="공유 관리 닫기">×</button></header>
+      <p>초대한 Google 계정만 검색·미리보기·다운로드할 수 있습니다. Gmail과 Google Workspace 계정을 지원합니다.</p>
+      <form id="sharing-form"><label for="invite-email">초대할 이메일</label><div class="sharing-input-row"><input id="invite-email" type="email" required maxlength="254" autocomplete="off" placeholder="name@gmail.com" /><button type="submit">초대 등록</button></div></form>
+      <ul id="sharing-members" aria-label="초대 목록"></ul>
+      <footer><label for="sharing-link">문서함 링크</label><div class="sharing-input-row"><input id="sharing-link" readonly /><button type="button" id="copy-library-link">링크 복사</button></div><small>초대를 등록한 뒤 링크를 직접 전달하세요. 권한을 회수하면 이후 접근이 차단됩니다.</small></footer>
+    </dialog>
     <dialog class="settings-dialog" id="settings-dialog">
       <form method="dialog" id="settings-form">
         <header><div><span>문서함 설정</span><h2>Google Drive 연결</h2></div><button type="button" class="dialog-close" aria-label="닫기">×</button></header>
-        <p>개인용 또는 학교 내부용 OAuth 웹 클라이언트 ID를 사용합니다. 액세스 토큰은 브라우저 메모리에만 보관됩니다.</p>
+        <p>로그인한 계정의 DocFinder 폴더에 파일을 업로드합니다. 업로드한 PDF·한글 파일은 자동으로 색인됩니다.</p>
         <label><span>서비스 이름</span><input id="setting-app-name" name="appName" required /></label>
-        <label><span>학교·기관명</span><input id="setting-organization" name="organization" required /></label>
-        <label><span>OAuth 클라이언트 ID</span><input id="setting-client-id" name="googleClientId" placeholder="000000000000-...apps.googleusercontent.com" /></label>
-        <label><span>Drive 루트 폴더 ID 또는 URL</span><input id="setting-folder-id" name="rootFolderId" placeholder="https://drive.google.com/drive/folders/..." /></label>
+        <label><span>문서함 이름</span><input id="setting-organization" name="organization" required /></label>
+        <label><span>Google 연결 설정 · 운영자용</span><input id="setting-client-id" name="googleClientId" placeholder="OAuth 웹 클라이언트 ID" /></label>
         <label><span>기존 PDF 편집기 URL</span><input id="setting-pdf-editor-url" name="pdfEditorUrl" type="text" placeholder="https://example.com/pdf-editor/" /></label>
         <p class="field-help">편집기 URL 뒤에 <code>source</code>, <code>fileId</code>, <code>name</code> 쿼리가 전달됩니다. URL에 <code>{source}</code> 같은 자리표시자를 직접 넣을 수도 있습니다.</p>
-        <label class="checkbox-row"><input id="setting-demo-mode" name="demoMode" type="checkbox" /><span><strong>데모 데이터 사용</strong><small>Google 설정 전에도 검색과 화면을 확인합니다.</small></span></label>
-        <aside><strong>권한 구성</strong><ol><li>Google Cloud에서 Drive API를 사용 설정합니다.</li><li>웹 애플리케이션 OAuth 클라이언트를 만듭니다.</li><li>배포 주소를 승인된 JavaScript 원본에 추가합니다.</li><li>공유할 Drive 폴더 주소를 입력합니다.</li></ol></aside>
+        <input id="setting-demo-mode" type="checkbox" hidden />
+        <aside><strong>내 파일 보관</strong><p>이 앱에서 만든 파일에 접근하는 권한을 요청합니다. 원본은 내 Drive에, 검색 색인은 이 브라우저에 저장합니다. 연결 해제는 Drive의 원본을 삭제하지 않습니다.</p></aside>
         <footer><button type="button" class="secondary-button dialog-cancel">취소</button><button type="submit" value="save">저장</button></footer>
       </form>
     </dialog>
@@ -120,8 +144,10 @@
     </dialog>
 
     <input id="local-hwp-input" type="file" accept=".hwp,.hwpx,application/x-hwp,application/hwp+zip" hidden />
+    <input id="drive-upload-input" type="file" accept=".pdf,.hwp,.hwpx" multiple hidden />
+    <input id="local-library-input" type="file" accept=".pdf,.hwp,.hwpx" multiple hidden />
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-    <script type="module" src="js/app.js?v=width-fit-2"></script>
+    <script type="module" src="js/app.js?v=phrase-map-2"></script>
   </body>
 </html>

@@ -1,22 +1,62 @@
-function normalize(value) {
-  return String(value ?? "").normalize("NFKC").toLocaleLowerCase("ko-KR").trim();
+export function normalizeSearchText(value) {
+  return String(value ?? "").normalize("NFKC").replace(/[\u200b-\u200d\ufeff\u00ad]/gu, "").toLocaleLowerCase("ko-KR");
 }
 
-export function matchProximity(value, query) {
-  const text = normalize(value);
-  const terms = [...new Set(normalize(query).split(/\s+/u).filter(Boolean))];
-  if (!terms.length) return { distance: 0, start: 0 };
+const normalize = (value) => normalizeSearchText(value).trim();
+
+// Spaces belong to a phrase; only commas introduce another AND operand.
+export function parseSearchTerms(query) {
+  const seen = new Set();
+  return normalize(query).split(",").map((term) => term.trim().replace(/\s+/gu, " ")).filter((term) => {
+    const key = searchNeedle(term);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function searchNeedle(term) {
+  return /\p{Script=Hangul}/u.test(term) ? term.replace(/\s+/gu, "") : term;
+}
+
+export function prepareSearchText(value) {
+  const text = normalizeSearchText(value);
+  let compact = "";
+  const offsets = new Uint32Array(text.length);
+  let length = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (/\s/u.test(text[index])) continue;
+    compact += text[index];
+    offsets[length++] = index;
+  }
+  return { text, compact, offsets: offsets.subarray(0, length) };
+}
+
+export function findPreparedOccurrences(prepared, query) {
+  const terms = parseSearchTerms(query);
   const occurrences = [];
   for (let termIndex = 0; termIndex < terms.length; termIndex += 1) {
+    const spacedKorean = /\p{Script=Hangul}/u.test(terms[termIndex]);
+    const text = spacedKorean ? prepared.compact : prepared.text;
+    const needle = searchNeedle(terms[termIndex]);
     let from = 0;
     while (from < text.length) {
-      const start = text.indexOf(terms[termIndex], from);
+      const start = text.indexOf(needle, from);
       if (start === -1) break;
-      occurrences.push({ start, end: start + terms[termIndex].length, termIndex });
+      const end = start + needle.length;
+      occurrences.push({ start: spacedKorean ? prepared.offsets[start] : start,
+        end: spacedKorean ? prepared.offsets[end - 1] + 1 : end, termIndex });
       from = start + 1;
     }
   }
   occurrences.sort((left, right) => left.start - right.start);
+  return { terms, occurrences };
+}
+
+export function matchPreparedProximity(prepared, query) {
+  const { terms, occurrences } = findPreparedOccurrences(prepared, query);
+  if (!terms.length) return { distance: 0, start: 0 };
+  if (new Set(occurrences.map((item) => item.termIndex)).size !== terms.length) return null;
   const counts = Array(terms.length).fill(0);
   const maximumEnds = [];
   let covered = 0;
@@ -38,6 +78,10 @@ export function matchProximity(value, query) {
     }
   }
   return best;
+}
+
+export function matchProximity(value, query) {
+  return matchPreparedProximity(prepareSearchText(value), query);
 }
 
 export function documentFormat(name, mimeType = "") {
@@ -64,8 +108,11 @@ export function filterDocuments(documents, criteria) {
 }
 
 export function buildDriveContentQuery(query) {
-  const terms = normalize(query).split(/\s+/u).filter(Boolean);
-  const clauses = terms.map((term) => `fullText contains '${term.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`);
+  const terms = parseSearchTerms(query);
+  const clauses = terms.map((term) => {
+    const escaped = term.replaceAll("\\", "\\\\").replaceAll("'", "\\'").replaceAll('"', '\\"');
+    return `fullText contains '${term.includes(" ") ? `"${escaped}"` : escaped}'`;
+  });
   return ["mimeType = 'application/pdf'", "trashed = false", ...clauses].join(" and ");
 }
 

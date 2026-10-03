@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function syntheticPdf(pageTexts) {
+export function syntheticPdf(pageTexts) {
   const objects = ["", "<< /Type /Catalog /Pages 2 0 R >>", ""];
   const pageIds = [];
   for (const [index, text] of pageTexts.entries()) {

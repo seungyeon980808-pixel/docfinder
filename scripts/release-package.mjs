@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertNoDisguisedDocument } from "./release-signature.mjs";
 
-const sourceFiles = new Set([".gitignore", "404.html", "DESIGN.md", "README.md", "config.js", "index.html", "package-lock.json", "package.json"]);
+const sourceFiles = new Set([".gitignore", ".dockerignore", ".env.example", "Dockerfile", "compose.yaml", "render.yaml", "404.html", "DESIGN.md", "README.md", "config.js", "index.html", "package-lock.json", "package.json"]);
 const sourceRoots = new Set(["data", "js", "scripts", "styles", "tests", "vendor"]);
 const deployFiles = new Set(["404.html", "_headers", "_redirects", "config.js", "favicon.ico", "index.html"]);
 const deployRoots = new Set(["data", "js", "library", "styles", "vendor"]);
@@ -28,7 +28,8 @@ const deployExtensions = new Map([
 function releaseRules(kind) {
   if (kind === "source") return { files: sourceFiles, roots: sourceRoots, extensions: sourceExtensions };
   if (kind === "deploy") return { files: deployFiles, roots: deployRoots, extensions: deployExtensions };
-  throw new Error("release kind must be source or deploy");
+  if (kind === "personal") return { files: deployFiles, roots: new Set(["data", "js", "styles", "vendor"]), extensions: deployExtensions };
+  throw new Error("release kind must be source, deploy or personal");
 }
 
 function isSecretName(name) {
@@ -100,6 +101,16 @@ async function assertReleaseRoot(root) {
 }
 
 async function assertRequiredReleaseStructure(kind, root) {
+  if (kind === "source") {
+    const template = await fs.readFile(path.join(root, ".env.example"), "utf8").catch((error) => { if (error.code === "ENOENT") return ""; throw error; });
+    if (/^(?:GOOGLE_CLIENT_SECRET|DATABASE_URL|DOCFINDER_ENCRYPTION_KEY|POSTGRES_PASSWORD)[\t ]*=[\t ]*[^\s#]/mu.test(template)) throw new Error("source env template must not contain credentials");
+  }
+  if (kind === "personal") {
+    const config = await fs.readFile(path.join(root, "config.js"), "utf8");
+    if (!/profile:\s*"private"/u.test(config) || !/demoMode:\s*false/u.test(config)) throw new Error("personal release must start without published or demo documents");
+    const demo = await fs.readFile(path.join(root, "data/demo-documents.js"), "utf8");
+    if (demo.trim() !== "export const DEMO_DOCUMENTS = [];") throw new Error("personal release must not include demo document metadata");
+  }
   if (kind !== "deploy") return;
   const stat = await lstatOrMissing(path.join(root, "library"));
   if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) {
@@ -210,7 +221,7 @@ async function main() {
     console.log(JSON.stringify({ ok: true, action, kind, fileCount: inventory.length }));
     return;
   }
-  throw new Error("usage: release-package.mjs package <source|deploy> <root> <output> | verify <source|deploy> <root>");
+  throw new Error("usage: release-package.mjs package <source|deploy|personal> <root> <output> | verify <source|deploy|personal> <root>");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

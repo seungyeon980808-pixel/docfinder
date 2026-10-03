@@ -1,5 +1,10 @@
 # Contains extracted text and links to private, user-managed documents.
 private/
 dist/
+dist-personal/
 source-package/
 node_modules/
+.docfinder-data/
+.env
+.env.*
+!.env.example

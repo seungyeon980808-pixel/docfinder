@@ -1,4 +1,5 @@
-import { matchProximity } from "./search.js?v=verification-2";
+import { matchProximity, parseSearchTerms } from "./search.js?v=phrase-map-2";
+import { searchLocalIndex } from "./local-index.js?v=phrase-map-2";
 
 const RHWP_CORE_URL = new URL("../vendor/rhwp-core/rhwp.js", import.meta.url).href;
 const RHWP_WASM_URL = new URL("../vendor/rhwp-core/rhwp_bg.wasm", import.meta.url).href;
@@ -13,14 +14,12 @@ function normalize(value) {
 }
 
 export function matchesAllTerms(text, query) {
-  const normalizedText = normalize(text);
-  const terms = normalize(query).trim().split(/\s+/u).filter(Boolean);
-  return terms.every((term) => normalizedText.includes(term));
+  return Boolean(matchProximity(text, query));
 }
 
 export function excerptAroundMatch(text, query, radius = 72) {
   const source = String(text ?? "").replace(/\s+/gu, " ").trim();
-  const firstTerm = normalize(query).trim().split(/\s+/u).find(Boolean) || "";
+  const firstTerm = parseSearchTerms(query)[0] || "";
   const index = normalize(source).indexOf(firstTerm);
   if (index < 0) return source.slice(0, radius * 2);
   const start = Math.max(0, index - radius);
@@ -121,11 +120,7 @@ export async function searchHwpContent(documents, query, getBytes, onProgress = 
         pages = await extractPages(await getBytes(documentItem));
         await cachePages(documentItem, pages);
       }
-      const best = findBestHwpPage(pages, query);
-      if (best) {
-        matches.push({ ...documentItem, page: best.page, matchDistance: best.distance,
-          excerpt: excerptAroundMatch(best.text, query), heading: `${best.page}쪽 한글 문서 본문 검색 결과` });
-      }
+      matches.push(...searchLocalIndex([documentItem], pages.map((entry) => ({ ...entry, id: documentItem.id })), query));
     } catch (error) {
       failures.push({ id: documentItem.id, name: documentItem.name, message: error instanceof Error ? error.message : String(error) });
     }

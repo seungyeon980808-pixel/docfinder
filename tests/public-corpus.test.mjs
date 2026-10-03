@@ -43,6 +43,8 @@ test("local indexing keeps its legacy behavior of ignoring unsupported regular f
   const isolatedApp = path.join(sandbox, "app");
   const source = path.join(sandbox, "source");
   await mkdir(path.join(isolatedApp, "scripts"), { recursive: true });
+  await mkdir(path.join(isolatedApp, "js"), { recursive: true });
+  await writeFile(path.join(isolatedApp, "js", "index-health.js"), await readFile(path.join(appRoot, "js", "index-health.js")));
   await mkdir(path.join(isolatedApp, "private"), { recursive: true });
   await mkdir(source);
   await writeFile(path.join(source, "notes.txt"), "legacy local-only fixture");

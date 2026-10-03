@@ -4,9 +4,7 @@
 
 @media (max-width: 959px) {
   .topbar { min-height: var(--topbar-mobile-height); }
-  .brand { padding: 0 var(--space-4); border: 0; }
-  .connection-status { padding-right: var(--space-3); }
-  .connection-status > span, .connection-status > i { display: none; }
+  .brand { border: 0; }
   .connection-status > button { margin: 0; }
   .workspace { display: grid; height: calc(100dvh - var(--topbar-mobile-height)); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .folder-panel { padding: 0 var(--space-3); }
@@ -27,6 +25,7 @@
   .detail-panel.is-open { transform: translateX(0); }
   .mobile-back { display: block; width: 100%; padding: var(--space-2) var(--space-3); color: var(--blue); text-align: left; background: var(--white); border: 0; border-bottom: var(--border-thin) solid var(--line); }
   .detail-panel #document-detail { padding-bottom: var(--mobile-bottom-gutter); }
+  .preview-location-map { top: 100px; bottom: var(--mobile-bottom-gutter); }
   .drive-preview { height: calc(100dvh - var(--topbar-mobile-height) - var(--space-6)); }
   .settings-dialog form { padding: var(--space-5) var(--space-4); }
   .settings-dialog aside { display: none; }
@@ -53,4 +52,21 @@
   .table-toolbar #sort-label { display: none; }
   .sync-notice { max-width: 28%; }
   .result-subline .result-date:not(:only-child) { display: none; }
+}
+
+@media (max-width: 599px) {
+  html[data-profile="private"] .topbar { gap: var(--space-1); }
+  html[data-profile="private"] .brand > span:last-child,
+  html[data-profile="private"] .connection-status > span,
+  html[data-profile="private"] .connection-status > i { display: none; }
+  html[data-profile="private"] .connection-status > button,
+  html[data-profile="private"] .tool-menu summary { padding-inline: var(--space-2); }
+  html[data-profile="private"] .index-health summary { padding-inline: var(--space-1); }
+  html[data-profile="private"] #upload-button:disabled { display: none; }
+  .preview-search-toolbar { gap: var(--space-1); }
+  .preview-search-toolbar button, .preview-match-list summary { padding-inline: var(--space-1); }
+  .index-health > div { top: calc(var(--topbar-mobile-height) + var(--space-1)); }
+}
+@media (max-width: 359px) {
+  .preview-search-toolbar { flex-wrap: wrap; }
 }
