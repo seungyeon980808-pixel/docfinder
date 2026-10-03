@@ -2,6 +2,7 @@ services:
   - type: web
     name: docfinder-share
     runtime: docker
+    branch: codex/shared-free-deploy
     plan: free
     region: oregon
     dockerfilePath: ./Dockerfile
