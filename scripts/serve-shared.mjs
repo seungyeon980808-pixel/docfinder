@@ -23,7 +23,10 @@ else if (!production) {
 if (key?.length !== 32) throw new Error('Set DOCFINDER_ENCRYPTION_KEY to 64 hexadecimal characters.');
 if (production && (!process.env.DATABASE_URL || !origin.startsWith('https://') || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)) throw new Error('Production requires DATABASE_URL, HTTPS DOCFINDER_ORIGIN, GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
 const db = await createDatabase({ url: process.env.DATABASE_URL, directory: path.join(dataRoot, 'postgres') });
-const app = await createSharedServer({ db, key, origin, dataRoot, maxFileBytes: maxFileMB * 1024 * 1024, clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET });
+let folderCredentials;
+try { folderCredentials = process.env.GOOGLE_FOLDER_SERVICE_ACCOUNT_JSON ? JSON.parse(process.env.GOOGLE_FOLDER_SERVICE_ACCOUNT_JSON) : undefined; }
+catch { throw new Error('GOOGLE_FOLDER_SERVICE_ACCOUNT_JSON must be a valid service account JSON.'); }
+const app = await createSharedServer({ db, key, origin, dataRoot, folderCredentials, maxFileBytes: maxFileMB * 1024 * 1024, clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET });
 app.server.listen(port, production ? '0.0.0.0' : '127.0.0.1', () => console.log(`DocFinder shared: ${origin} · ${process.env.GOOGLE_CLIENT_ID ? 'Google configured' : 'Google setup required'}`));
 let stopping = false;
 async function stop() { if (stopping) return; stopping = true; await app.close(); await db.close(); process.exit(0); }

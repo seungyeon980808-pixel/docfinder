@@ -1,11 +1,12 @@
 import fs from 'node:fs/promises';
 import { OAuth2Client } from 'google-auth-library';
 import { encrypt, decrypt, deny, identityFromPayload, HttpError } from './security.mjs';
+import { FolderReader } from './folder-reader.mjs';
 
 const scope = 'https://www.googleapis.com/auth/drive.file';
 const fields = 'id,name,mimeType,modifiedTime,createdTime,size,md5Checksum,appProperties';
 export class SharedDrive {
-  constructor({ db, key, clientId, clientSecret, origin, maxFileBytes = 128 * 1024 * 1024 }) { Object.assign(this, { db, key, clientId, clientSecret, origin, maxFileBytes }); this.refreshes = new Map(); this.accessTokens = new Map(); }
+  constructor({ db, key, clientId, clientSecret, origin, maxFileBytes = 128 * 1024 * 1024, folderCredentials }) { Object.assign(this, { db, key, clientId, clientSecret, origin, maxFileBytes }); this.refreshes = new Map(); this.accessTokens = new Map(); this.folderReader = new FolderReader(folderCredentials, maxFileBytes); }
   client() { return new OAuth2Client(this.clientId, this.clientSecret, `${this.origin}/api/drive/callback`); }
   authUrl(state) {
     if (!this.clientId || !this.clientSecret) deny(503, '운영자의 Google Drive 연결 설정이 필요합니다.');
@@ -78,11 +79,28 @@ export class SharedDrive {
     return result;
   }
   async files(libraryId) {
-    const connection = (await this.db.query('SELECT folder_id FROM df_connections WHERE library_id=$1', [libraryId])).rows[0];
-    if (!connection) deny(409, 'Google Drive를 먼저 연결하세요.');
-    return this.list(await this.token(libraryId), `'${connection.folder_id.replaceAll("'", '')}' in parents and trashed=false and appProperties has { key='docfinderDocument' and value='1' }`);
+    const connection = (await this.db.query('SELECT folder_id,status FROM df_connections WHERE library_id=$1', [libraryId])).rows[0];
+    const source = (await this.db.query('SELECT * FROM df_folder_sources WHERE library_id=$1', [libraryId])).rows[0];
+    if (connection?.status !== 'ready' && !source) deny(409, 'Drive 또는 기존 폴더를 먼저 연결하세요.');
+    const files = connection?.status === 'ready' ? await this.list(await this.token(libraryId), `'${connection.folder_id.replaceAll("'", '')}' in parents and trashed=false and appProperties has { key='docfinderDocument' and value='1' }`) : [];
+    if (source) {
+      try {
+        files.push(...await this.folderReader.files(source.folder_id));
+        await this.db.query("UPDATE df_folder_sources SET status='ready',last_error='' WHERE library_id=$1", [libraryId]);
+      } catch (error) {
+        await this.db.query("UPDATE df_folder_sources SET status='error',last_error=$2 WHERE library_id=$1", [libraryId, error instanceof HttpError ? error.message : 'Drive 폴더를 읽지 못했습니다. 자동으로 다시 시도합니다.']);
+        throw error; // A partial listing must never prune previously indexed originals.
+      }
+    }
+    return [...new Map(files.map((file) => [file.id, file])).values()];
   }
   async bytes(libraryId, id) {
+    const document = (await this.db.query('SELECT metadata FROM df_documents WHERE library_id=$1 AND id=$2', [libraryId, id])).rows[0];
+    if (document?.metadata.sourceFolderId) {
+      const source = (await this.db.query('SELECT * FROM df_folder_sources WHERE library_id=$1', [libraryId])).rows[0];
+      if (!source || source.status !== 'ready' || source.folder_id !== document.metadata.sourceFolderId) deny(409, '연결한 Drive 폴더의 접근 권한을 확인하세요.');
+      return this.folderReader.bytes(source.folder_id, id);
+    }
     const response = await this.request(await this.token(libraryId), `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`);
     const chunks = []; let size = 0;
     for await (const chunk of response.body) { size += chunk.length; if (size > this.maxFileBytes) { await response.body.cancel().catch(() => {}); deny(413, `파일은 ${this.maxFileBytes / 1024 / 1024}MB 이하로 준비하세요.`); } chunks.push(chunk); }
@@ -119,6 +137,8 @@ export class SharedDrive {
     deny(502, 'Drive 업로드 완료를 확인하지 못했습니다.');
   }
   async trash(libraryId, id) {
+    const document = (await this.db.query('SELECT metadata FROM df_documents WHERE library_id=$1 AND id=$2', [libraryId, id])).rows[0];
+    if (document?.metadata.sourceFolderId) deny(403, '연결한 폴더의 원본은 Google Drive에서 관리하세요.');
     await this.request(await this.token(libraryId), `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true })
     });

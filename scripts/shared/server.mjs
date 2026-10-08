@@ -22,11 +22,11 @@ async function jsonBody(request) {
   try { return JSON.parse(Buffer.concat(chunks).toString()); } catch { deny(400, '요청 형식을 확인하세요.'); }
 }
 
-export async function createSharedServer({ db, key, origin, clientId = '', clientSecret = '', dataRoot, maxFileBytes = 128 * 1024 * 1024, verify, drive: providedDrive, jobs: jobsEnabled = true, extract } = {}) {
+export async function createSharedServer({ db, key, origin, clientId = '', clientSecret = '', dataRoot, maxFileBytes = 128 * 1024 * 1024, folderCredentials, verify, drive: providedDrive, jobs: jobsEnabled = true, extract } = {}) {
   const site = new URL(origin); const secure = site.protocol === 'https:';
   if (site.origin !== origin || !['http:', 'https:'].includes(site.protocol)) throw new Error('DOCFINDER_ORIGIN must be a URL origin without a path or trailing slash');
   if (!secure && !['localhost', '127.0.0.1', '[::1]'].includes(site.hostname)) throw new Error('HTTPS origin required');
-  const drive = providedDrive || new SharedDrive({ db, key, origin, clientId, clientSecret, maxFileBytes });
+  const drive = providedDrive || new SharedDrive({ db, key, origin, clientId, clientSecret, maxFileBytes, folderCredentials });
   const service = new LibraryService(db, drive, maxFileBytes); const verifyIdentity = verify || googleVerifier(clientId);
   const uploadsRoot = path.join(dataRoot, 'uploads'); await fs.mkdir(uploadsRoot, { recursive: true, mode: 0o700 });
   const jobs = jobsEnabled ? createJobs({ db, drive, service, extract }) : null;
@@ -122,6 +122,10 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
       if (request.method === 'POST' && action === 'invitations') { const { email } = await jsonBody(request); await service.invite(user, id, email); return write(response, 201, { invited: true }); }
       if (request.method === 'DELETE' && action.startsWith('invitations/')) { await service.revoke(user, id, action.slice('invitations/'.length)); return write(response, 200, { revoked: true }); }
       await service.permission(user, id);
+      if (action === 'folder' && request.method === 'GET') return write(response, 200, await service.folderSettings(user, id));
+      if (action === 'folder' && request.method === 'POST') { const { url } = await jsonBody(request); return write(response, 200, await service.connectFolder(user, id, url)); }
+      if (action === 'folder' && request.method === 'DELETE') { await service.disconnectFolder(user, id); return write(response, 200, { disconnected: true }); }
+      if (action === 'folder/prepare' && request.method === 'POST') { const { url } = await jsonBody(request); return write(response, 200, await service.prepareFolder(user, id, url)); }
       if (request.method === 'POST' && action === 'drive') {
         await service.permission(user, id, true); const state = opaque(); const authUrl = drive.authUrl(state);
         await db.query(`INSERT INTO df_oauth_states(hash,session_hash,library_id,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes')`, [digest(state), current.hash, id]);
@@ -163,7 +167,8 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
       const document = /^documents\/([a-zA-Z0-9_-]+)\/(original|retry)$/u.exec(action);
       const removal = /^documents\/([a-zA-Z0-9_-]+)$/u.exec(action);
       if (removal && request.method === 'DELETE') {
-        await service.permission(user, id, true); await service.document(user, id, removal[1]);
+        await service.permission(user, id, true); const item = await service.document(user, id, removal[1]);
+        if (item.metadata.readOnly) deny(403, '연결한 폴더의 원본은 Google Drive에서 관리하세요.');
         await drive.trash(id, removal[1]); await db.query('DELETE FROM df_documents WHERE library_id=$1 AND id=$2', [id, removal[1]]);
         service.cache.delete(id); return write(response, 200, { trashed: true });
       }
@@ -173,6 +178,10 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
         if (url.searchParams.get('version') && url.searchParams.get('version') !== row.version) deny(409, '문서가 변경되었습니다. 목록을 새로고침하세요.');
         const bytes = await drive.bytes(id, document[1]);
         await service.permission(user, id); // Permission can change while Drive is responding.
+        if (row.metadata.sourceFolderId) {
+          const latest = await service.document(user, id, document[1]);
+          if (latest.metadata.sourceFolderId !== row.metadata.sourceFolderId) deny(409, '폴더 연결이 변경되었습니다. 목록을 갱신하세요.');
+        }
         response.writeHead(200, { 'Content-Type': row.metadata.format === 'pdf' ? 'application/pdf' : 'application/octet-stream', 'Content-Length': bytes.length, 'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(row.metadata.name)}` }); response.end(bytes); return;
       }
       deny(404, '찾을 수 없습니다.');

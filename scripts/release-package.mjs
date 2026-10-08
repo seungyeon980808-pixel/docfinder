@@ -103,7 +103,7 @@ async function assertReleaseRoot(root) {
 async function assertRequiredReleaseStructure(kind, root) {
   if (kind === "source") {
     const template = await fs.readFile(path.join(root, ".env.example"), "utf8").catch((error) => { if (error.code === "ENOENT") return ""; throw error; });
-    if (/^(?:GOOGLE_CLIENT_SECRET|DATABASE_URL|DOCFINDER_ENCRYPTION_KEY|POSTGRES_PASSWORD)[\t ]*=[\t ]*[^\s#]/mu.test(template)) throw new Error("source env template must not contain credentials");
+    if (/^(?:GOOGLE_CLIENT_SECRET|GOOGLE_FOLDER_SERVICE_ACCOUNT_JSON|DATABASE_URL|DOCFINDER_ENCRYPTION_KEY|POSTGRES_PASSWORD)[\t ]*=[\t ]*[^\s#]/mu.test(template)) throw new Error("source env template must not contain credentials");
   }
   if (kind === "personal") {
     const config = await fs.readFile(path.join(root, "config.js"), "utf8");

@@ -97,7 +97,7 @@ test("source env template accepts empty settings and refuses embedded server cre
   context.after(() => fs.rm(source, { recursive: true, force: true }));
   await writeFixture(source, '.env.example', 'GOOGLE_CLIENT_SECRET=\nDATABASE_URL=\nDOCFINDER_ENCRYPTION_KEY=\n');
   assert.ok((await collectReleaseInventory('source', source)).includes('.env.example'));
-  for (const name of ['GOOGLE_CLIENT_SECRET', 'DATABASE_URL', 'DOCFINDER_ENCRYPTION_KEY', 'POSTGRES_PASSWORD']) {
+  for (const name of ['GOOGLE_CLIENT_SECRET', 'GOOGLE_FOLDER_SERVICE_ACCOUNT_JSON', 'DATABASE_URL', 'DOCFINDER_ENCRYPTION_KEY', 'POSTGRES_PASSWORD']) {
     await writeFixture(source, '.env.example', `${name}=fixture-sensitive-value\n`);
     await assert.rejects(collectReleaseInventory('source', source), /must not contain credentials/);
   }

@@ -39,6 +39,7 @@
           <button type="button" id="connect-button">Drive 연결</button>
           <button type="button" id="upload-button" hidden disabled>파일 업로드</button>
           <button type="button" id="share-button" hidden>공유 관리</button>
+          <button type="button" id="folder-connect-button" hidden>기존 폴더 연결</button>
           <button type="button" id="google-login-button" hidden>Google 로그인</button>
           <button type="button" id="shared-logout-button" hidden>로그아웃</button>
           <details class="tool-menu" id="tool-menu">
@@ -113,6 +114,17 @@
       <form id="sharing-form"><label for="invite-email">초대할 이메일</label><div class="sharing-input-row"><input id="invite-email" type="email" required maxlength="254" autocomplete="off" placeholder="name@gmail.com" /><button type="submit">초대 등록</button></div></form>
       <ul id="sharing-members" aria-label="초대 목록"></ul>
       <footer><label for="sharing-link">문서함 링크</label><div class="sharing-input-row"><input id="sharing-link" readonly /><button type="button" id="copy-library-link">링크 복사</button></div><small>초대를 등록한 뒤 링크를 직접 전달하세요. 권한을 회수하면 이후 접근이 차단됩니다.</small></footer>
+    </dialog>
+    <dialog class="sharing-dialog" id="folder-dialog" aria-labelledby="folder-title">
+      <header><h2 id="folder-title">기존 Drive 폴더 연결</h2><button type="button" class="dialog-close" data-close-shared-dialog aria-label="폴더 연결 창 닫기">×</button></header>
+      <p>폴더의 PDF·HWP·HWPX와 하위 폴더를 자동 색인합니다. 이후 새 파일과 변경 사항도 반영합니다.</p>
+      <p id="folder-setup-message"></p>
+      <label for="folder-reader-email">이 주소를 Drive 폴더 공유에 ‘뷰어’로 추가하세요</label>
+      <div class="sharing-input-row"><input id="folder-reader-email" readonly /><button type="button" id="copy-folder-reader">주소 복사</button></div>
+      <form id="folder-connect-form"><label for="folder-url">Google Drive 폴더 링크</label><div class="sharing-input-row"><input id="folder-url" type="url" required placeholder="https://drive.google.com/drive/folders/…" /><button type="submit" id="folder-connect-submit">연결</button></div></form>
+      <p id="folder-source-status" role="status"></p>
+      <details><summary>다른 Google 계정의 폴더를 연결하는 경우</summary><p>폴더 소유 계정으로 로그인하거나, 연결 승인 파일을 다운로드해 해당 Drive 폴더에 넣은 뒤 연결하세요. 승인 파일은 1시간 동안 유효합니다.</p><button type="button" id="folder-proof-download">연결 승인 파일 다운로드</button><textarea id="folder-proof-content" hidden readonly></textarea><input id="folder-proof-name" hidden readonly /></details>
+      <footer><small>연결한 원본은 Drive에서 관리합니다. 연결 해제는 이 폴더의 검색 색인을 제거합니다.</small><button type="button" id="folder-disconnect" class="secondary-button" hidden>폴더 연결 해제</button></footer>
     </dialog>
     <dialog class="settings-dialog" id="settings-dialog">
       <form method="dialog" id="settings-form">

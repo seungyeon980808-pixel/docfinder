@@ -98,7 +98,7 @@ function renderDocuments(state) {
         ${item.libraryId && item.indexStatus === "error" && (!state.sharedMode || state.sharedLibrary?.role === "owner") ? '<button type="button" data-row-action="reindex">색인 다시 시도</button>' : ""}
         <button type="button" data-row-action="original">원문 열기</button>
         <button type="button" data-row-action="link">문서 링크 복사</button>
-        ${state.sharedMode && state.sharedLibrary?.role === "owner" ? '<button type="button" data-row-action="trash">Drive 휴지통으로 이동</button>' : ''}
+        ${state.sharedMode && state.sharedLibrary?.role === "owner" && !item.readOnly ? '<button type="button" data-row-action="trash">Drive 휴지통으로 이동</button>' : ''}
         ${!state.sharedMode || state.sharedLibrary?.role === "owner" ? `<button type="button" data-row-action="edit">${["hwp", "hwpx"].includes(formatOf(item)) ? "RHWP로 편집" : "PDF 편집기에서 열기"}</button>` : ''}
         <small>${folderPath(item) ? `${escapeHtml(folderPath(item))}<br>` : ""}수정일 ${formatDate(item.modifiedTime)} · ${formatSize(item.size)}</small>
       </div></details>
@@ -164,13 +164,14 @@ function renderConnection(state) {
   upload.hidden = !state.personalMode && !(state.sharedMode && state.sharedLibrary?.role === "owner");
   upload.disabled = !state.driveConnected || state.personalBusy;
   document.querySelector("#disconnect-button").hidden = !state.driveConnected || state.sharedMode && state.sharedLibrary?.role !== "owner";
-  if (state.sharedMode) status.querySelector("span").textContent = state.personalBusy ? "업로드 중" : state.sharedUser ? state.sharedLibrary?.role === "reader" ? "열람자" : state.driveConnected ? "Drive 연결됨" : "Drive 연결 필요" : "로그인 필요";
+  if (state.sharedMode) status.querySelector("span").textContent = state.personalBusy ? "업로드 중" : state.sharedUser ? state.sharedLibrary?.role === "reader" ? "열람자" : state.sharedFolderSource ? state.sharedFolderSource.status === 'ready' ? `폴더 연결 · ${state.sharedFolderSource.name}` : "폴더 연결 확인 필요" : state.driveConnected ? "Drive 연결됨" : "Drive 연결 필요" : "로그인 필요";
   const picker = document.querySelector("#library-picker");
   picker.hidden = !state.sharedMode || !state.sharedUser;
   const options = (state.sharedLibraries || []).map((item) => `<option value="${escapeHtml(item.id)}">${item.role === "owner" ? "내 문서함" : "초대받은 문서함"} · ${escapeHtml(item.name)}${item.status === "pending" ? " (참여 대기)" : ""}</option>`).join('');
   if (picker.dataset.options !== options) { picker.innerHTML = options; picker.dataset.options = options; }
   if (state.sharedLibrary) picker.value = state.sharedLibrary.id;
   document.querySelector("#share-button").hidden = !state.sharedMode || state.sharedLibrary?.role !== "owner";
+  document.querySelector("#folder-connect-button").hidden = !state.sharedMode || state.sharedLibrary?.role !== "owner";
   document.querySelector("#google-login-button").hidden = !state.sharedMode;
   document.querySelector("#google-login-button").textContent = state.sharedUser ? "계정 바꾸기" : "Google 로그인";
   document.querySelector("#shared-logout-button").hidden = !state.sharedMode || !state.sharedUser;

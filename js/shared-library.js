@@ -8,12 +8,13 @@ export function createSharedLibrary({ onChange, notify }) {
   function snapshot() { return { sharedUser: session?.user, sharedConfigured: session?.configured, sharedLibraries: libraries, sharedLibrary: library,
     sharedPending: pending, sharedAccessError: accessError, documents: catalog?.documents || [], indexStats: catalog?.stats,
     sourceName: library?.name || '공유 문서함', libraryId: library?.id || '', lastSync: catalog?.lastSync,
-    driveConnected: Boolean(catalog?.driveConnected), personalBusy: busy, personalProgress: progress,
-    connection: accessError || catalog?.stats?.failures ? 'error' : busy ? 'indexing' : catalog?.driveConnected ? 'connected' : 'idle' }; }
+    driveConnected: Boolean(catalog?.driveConnected), sharedFolderSource: catalog?.folderSource, personalBusy: busy, personalProgress: progress,
+    connection: accessError || catalog?.stats?.failures || catalog?.folderSource?.status === 'error' ? 'error' : busy ? 'indexing' : catalog?.driveConnected || catalog?.folderSource?.status === 'ready' ? 'connected' : 'idle' }; }
   const emit = () => onChange(snapshot());
   function clear() {
     generation++; abort.abort(); abort = new AbortController(); library = undefined; catalog = undefined; pending = undefined; accessError = ''; busy = false; progress = '';
     document.querySelector('#sharing-dialog').close(); document.querySelector('#sharing-members').replaceChildren(); document.querySelector('#sharing-link').value = ''; document.querySelector('#invite-email').value = ''; emit();
+    document.querySelector('#folder-dialog').close(); document.querySelector('#folder-reader-email').value = ''; document.querySelector('#folder-url').value = ''; document.querySelector('#folder-proof-content').value = ''; document.querySelector('#folder-proof-name').value = '';
   }
   async function request(url, { method = 'GET', body, signal = abort.signal } = {}) {
     const response = await fetch(url, { method, credentials: 'same-origin', cache: 'no-store', signal,
@@ -51,7 +52,7 @@ export function createSharedLibrary({ onChange, notify }) {
       session = latestSession;
       const next = await request(`/api/libraries/${id}`);
       if (job !== generation) return;
-      const changed = next.revision !== catalog?.revision || next.driveConnected !== catalog?.driveConnected;
+      const changed = next.revision !== catalog?.revision || next.driveConnected !== catalog?.driveConnected || JSON.stringify(next.folderSource) !== JSON.stringify(catalog?.folderSource);
       catalog = next; if (changed) emit();
     } catch (error) {
       if (job !== generation || error.name === 'AbortError') return;
@@ -83,6 +84,30 @@ export function createSharedLibrary({ onChange, notify }) {
     document.querySelector('#google-login-button').addEventListener('click', login);
     document.querySelector('#shared-logout-button').addEventListener('click', logout);
     document.querySelector('#share-button').addEventListener('click', sharing);
+    document.querySelector('#folder-connect-button').addEventListener('click', folderSettings);
+    document.querySelector('#copy-folder-reader').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(document.querySelector('#folder-reader-email').value); notify('폴더 공유에 추가할 주소를 복사했습니다.'); } catch { document.querySelector('#folder-reader-email').select(); }
+    });
+    document.querySelector('#folder-connect-form').addEventListener('submit', async (event) => {
+      event.preventDefault(); const button = event.submitter; const id = library?.id; const job = generation; button.disabled = true;
+      try { const value = await request(`/api/libraries/${id}/folder`, { method: 'POST', body: { url: document.querySelector('#folder-url').value } });
+        if (job !== generation) return;
+        document.querySelector('#folder-dialog').close(); await refresh(); notify(value.pending ? '폴더를 연결했습니다. 목록 갱신은 자동으로 다시 시도합니다.' : '폴더를 연결했습니다. 본문 색인은 자동으로 생성됩니다.');
+      } catch (error) { if (job === generation) document.querySelector('#folder-source-status').textContent = error.message; }
+      finally { button.disabled = false; }
+    });
+    document.querySelector('#folder-disconnect').addEventListener('click', async () => {
+      const id = library?.id; const job = generation;
+      try { await request(`/api/libraries/${id}/folder`, { method: 'DELETE' }); if (job !== generation) return; document.querySelector('#folder-dialog').close(); await refresh(); notify('폴더 연결과 해당 검색 색인을 제거했습니다.'); } catch (error) { notify(error.message); }
+    });
+    document.querySelector('#folder-proof-download').addEventListener('click', async () => {
+      const id = library?.id; const job = generation;
+      try { const value = await request(`/api/libraries/${id}/folder/prepare`, { method: 'POST', body: { url: document.querySelector('#folder-url').value } }); if (job !== generation) return;
+        document.querySelector('#folder-proof-content').value = value.contents; document.querySelector('#folder-proof-name').value = value.filename;
+        const url = URL.createObjectURL(new Blob([value.contents], { type: 'text/plain;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = value.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+        document.querySelector('#folder-source-status').textContent = '승인 파일을 해당 Drive 폴더에 넣은 뒤 연결하세요.';
+      } catch (error) { notify(error.message); }
+    });
     document.querySelector('#sharing-form').addEventListener('submit', async (event) => {
       event.preventDefault(); const input = document.querySelector('#invite-email'); const button = event.submitter; button.disabled = true;
       try { await request(`/api/libraries/${library.id}/invitations`, { method: 'POST', body: { email: input.value } }); input.value = ''; await members(); notify('초대를 등록했습니다. 문서함 링크를 전달하세요.'); }
@@ -127,6 +152,19 @@ export function createSharedLibrary({ onChange, notify }) {
     if (library?.role !== 'owner') return;
     try { await members(); document.querySelector('#sharing-title').textContent = library.name; document.querySelector('#sharing-link').value = new URL(`/s/${library.share_id}`, location.origin).href; document.querySelector('#sharing-dialog').showModal(); }
     catch (error) { notify(error.message); }
+  }
+  async function folderSettings() {
+    if (library?.role !== 'owner') return;
+    const id = library.id; const job = generation;
+    try { const value = await request(`/api/libraries/${id}/folder`); if (job !== generation) return;
+      document.querySelector('#folder-reader-email').value = value.readerEmail;
+      document.querySelector('#folder-url').value = value.source ? `https://drive.google.com/drive/folders/${value.source.folder_id}` : '';
+      document.querySelector('#folder-connect-submit').disabled = !value.configured;
+      document.querySelector('#folder-setup-message').textContent = value.configured ? '필요한 폴더만 공유하면 됩니다. 전체 Drive 접근 권한은 요청하지 않습니다.' : '운영자가 폴더 연결 설정을 준비하고 있습니다.';
+      document.querySelector('#folder-source-status').textContent = value.source?.last_error || (value.source ? `${value.source.name} 연결됨` : '');
+      document.querySelector('#folder-disconnect').hidden = !value.source;
+      document.querySelector('#folder-dialog').showModal();
+    } catch (error) { notify(error.message); }
   }
   return { start, refresh, login, async connect() {
     try { const value = await request(`/api/libraries/${library.id}/drive`, { method: 'POST', body: {} }); location.assign(value.url); } catch (error) { notify(error.message); }

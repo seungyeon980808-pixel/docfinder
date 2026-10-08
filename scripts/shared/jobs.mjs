@@ -51,7 +51,7 @@ export function createJobs({ db, drive, service, extract = extractPages, pollMs 
   async function sync() {
     if (syncing) return; syncing = true;
     try {
-      const connections = (await db.query(`SELECT library_id FROM df_connections WHERE status='ready'`)).rows;
+      const connections = (await db.query(`SELECT library_id FROM df_connections WHERE status='ready' UNION SELECT library_id FROM df_folder_sources`)).rows;
       for (const row of connections) { if (stopped) break; await service.sync(row.library_id).catch(() => {}); }
     } finally { syncing = false; }
   }
