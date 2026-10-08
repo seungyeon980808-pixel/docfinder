@@ -146,6 +146,25 @@ test('Actual server extraction rejects damaged PDF and indexes PDF pages', async
   await assert.rejects(extractPages('pdf', Buffer.from('not a pdf')));
 });
 
+test('Malformed extracted Unicode remains searchable after PostgreSQL JSON storage', async (t) => {
+  const app = await sharedFixture(); t.after(() => app.close());
+  const user = { id: 'unicode-owner', email: 'unicode@gmail.com', name: 'Unicode' };
+  await app.service.register(user);
+  const library = (await app.service.libraries(user))[0];
+  await app.service.upsertFile(library.id, { id: 'unicode-document', name: 'fixture.pdf', size: 1, modifiedTime: '2026-10-08T01:00:00Z' });
+  app.drive.bytes = async () => Buffer.from('fixture');
+  const jobs = createJobs({ db: app.db, drive: app.drive, service: app.service, pollMs: 86400000,
+    extract: async () => [{ page: 1, text: '학생자치 \ud800 회장 \udc00 \u0000 😀' }, { page: 2, text: '정상 학교' }] });
+  await jobs.once(); await jobs.stop();
+  const row = (await app.db.query('SELECT status,pages FROM df_documents WHERE library_id=$1 AND id=$2', [library.id, 'unicode-document'])).rows[0];
+  assert.equal(row.status, 'ready');
+  assert.equal(row.pages[0].text, '학생자치 � 회장 � � 😀');
+  assert.equal(row.pages[1].text, '정상 학교');
+  const results = await app.service.search(user, library.id, '학생자치, 회장', 'content');
+  assert.equal(results.length, 1);
+  assert.equal(results[0].matchedPages[0].page, 1);
+});
+
 test('Production Google verifier has no fixture sign-in fallback', async () => {
   await assert.rejects(googleVerifier('')('host'), (error) => error.status === 503);
 });

@@ -31,7 +31,9 @@ export function createJobs({ db, drive, service, extract = extractPages, pollMs 
     try {
       const row = (await db.query('SELECT * FROM df_documents WHERE library_id=$1 AND id=$2', [job.library_id, job.document_id])).rows[0];
       if (!row || row.version !== job.version) throw new Error('Stale job');
-      const pages = await extract(row.metadata.format, await drive.bytes(job.library_id, job.document_id));
+      const extracted = await extract(row.metadata.format, await drive.bytes(job.library_id, job.document_id));
+      // PostgreSQL jsonb rejects lone surrogates and NUL produced by some PDF fonts.
+      const pages = extracted.map((page) => ({ ...page, text: page.text.toWellFormed().replaceAll('\u0000', '\uFFFD') }));
       await db.transaction(async (tx) => {
         const current = (await tx.query('SELECT status,lease_owner FROM df_jobs WHERE id=$1 FOR UPDATE', [job.id])).rows[0];
         if (current?.status !== 'running' || current.lease_owner !== owner) return;
