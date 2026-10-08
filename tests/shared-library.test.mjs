@@ -28,6 +28,11 @@ test('Free hosting health checks do not create sessions and configured size caps
   assert.equal(ready.status, 200); assert.deepEqual(await ready.json(), { status: 'ready' });
   assert.equal(ready.headers.get('set-cookie'), null);
   assert.equal((await app.db.query('SELECT count(*) AS count FROM df_sessions')).rows[0].count, 0);
+  for (const page of ['privacy.html', 'terms.html']) {
+    const notice = await fetch(`${app.origin}/${page}`);
+    assert.equal(notice.status, 200); assert.match(await notice.text(), /DocFinder/);
+    assert.equal(notice.headers.get('set-cookie'), null);
+  }
   const head = await fetch(`${app.origin}/healthz`, { method: 'HEAD' });
   assert.equal(head.status, 200); assert.equal(await head.text(), '');
   const query = app.db.query;

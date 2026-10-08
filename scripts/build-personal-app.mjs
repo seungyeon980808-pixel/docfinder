@@ -13,7 +13,7 @@ export async function buildPersonalApp({ source = appRoot, output, clientId = ""
   await fs.mkdir(parent, { recursive: true });
   const staging = await fs.mkdtemp(path.join(parent, ".docfinder-personal-"));
   try {
-    for (const file of inventory.filter((file) => ["index.html", "404.html"].includes(file) || /^(js|styles|vendor)\//u.test(file))) {
+    for (const file of inventory.filter((file) => ["index.html", "404.html", "privacy.html", "terms.html"].includes(file) || /^(js|styles|vendor)\//u.test(file))) {
       await fs.mkdir(path.dirname(path.join(staging, file)), { recursive: true });
       await fs.copyFile(path.join(source, file), path.join(staging, file));
     }

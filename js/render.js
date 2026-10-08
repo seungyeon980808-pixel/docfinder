@@ -158,13 +158,13 @@ function renderConnection(state) {
   const labels = { demo: "데모 데이터", local: state.autoIndex ? "자동 갱신" : "로컬 색인", indexing: "색인 중", connecting: "연결 중", connected: "Drive 연결됨", error: "확인 필요" };
   status.querySelector("span").textContent = state.personalBusy ? "파일 처리 중" : state.publicMode ? state.connection === "error" ? "목록 오류" : "문서함" : labels[state.connection] || "연결 안 됨";
   status.title = state.indexMessage || `문서 ${state.documents.length}개 · ${formatDateTime(state.lastSync)}`;
-  status.querySelector("#connect-button").textContent = state.connection === "connected" ? "다시 연결" : "Drive 연결";
+  status.querySelector("#connect-button").textContent = state.driveConnected ? "다시 연결" : "Drive 연결";
   status.querySelector("#connect-button").hidden = state.localMode || state.publicMode || state.sharedMode && state.sharedLibrary?.role !== "owner";
   const upload = document.querySelector("#upload-button");
   upload.hidden = !state.personalMode && !(state.sharedMode && state.sharedLibrary?.role === "owner");
   upload.disabled = !state.driveConnected || state.personalBusy;
   document.querySelector("#disconnect-button").hidden = !state.driveConnected || state.sharedMode && state.sharedLibrary?.role !== "owner";
-  if (state.sharedMode) status.querySelector("span").textContent = state.personalBusy ? "업로드 중" : state.sharedUser ? state.sharedLibrary?.role === "reader" ? "열람자" : "내 문서함" : "로그인 필요";
+  if (state.sharedMode) status.querySelector("span").textContent = state.personalBusy ? "업로드 중" : state.sharedUser ? state.sharedLibrary?.role === "reader" ? "열람자" : state.driveConnected ? "Drive 연결됨" : "Drive 연결 필요" : "로그인 필요";
   const picker = document.querySelector("#library-picker");
   picker.hidden = !state.sharedMode || !state.sharedUser;
   const options = (state.sharedLibraries || []).map((item) => `<option value="${escapeHtml(item.id)}">${item.role === "owner" ? "내 문서함" : "초대받은 문서함"} · ${escapeHtml(item.name)}${item.status === "pending" ? " (참여 대기)" : ""}</option>`).join('');

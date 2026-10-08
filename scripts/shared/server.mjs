@@ -97,13 +97,19 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
         const state = url.searchParams.get('state') || '';
         const row = await db.transaction(async (tx) => (await tx.query(`DELETE FROM df_oauth_states WHERE hash=$1 AND session_hash=$2 AND expires_at>now() RETURNING *`, [digest(state), current.hash])).rows[0]);
         if (!row) deny(403, 'Drive 연결 요청이 만료되었습니다. 다시 시도하세요.');
-        let result = 'connected';
+        let result = 'connected'; let reason = '';
         try {
-          if (url.searchParams.has('error')) deny(400, 'Drive 연결을 취소했습니다.');
+          if (url.searchParams.has('error')) { reason = 'access_denied'; deny(400, 'Drive 연결을 취소했습니다.'); }
           const library = await service.permission(user, row.library_id, true);
-          await drive.connect(url.searchParams.get('code'), library, user); await service.sync(library.id);
-        } catch { result = 'failed'; }
-        response.writeHead(303, { Location: `/?drive=${result}` }); response.end(); return;
+          await drive.connect(url.searchParams.get('code'), library, user);
+          try { await service.sync(library.id); } catch { result = 'sync-pending'; }
+        } catch (error) {
+          result = 'failed';
+          reason ||= error.status >= 500 ? 'temporary' : error.message?.includes('접근 권한') ? 'scope_missing'
+            : error.message?.includes('지속적인') ? 'refresh_missing' : error.message?.includes('같은 Google 계정') ? 'account_mismatch' : 'connection_failed';
+          console.error(`DocFinder Drive connection failed: ${reason}`);
+        }
+        response.writeHead(303, { Location: `/?drive=${result}${reason ? `&drive_reason=${reason}` : ''}` }); response.end(); return;
       }
       const match = /^\/api\/libraries\/([a-zA-Z0-9_-]+)(?:\/(.*))?$/u.exec(pathname);
       if (!match) deny(404, '찾을 수 없습니다.');
@@ -179,7 +185,7 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
       response.writeHead(200, { 'Content-Type': 'text/javascript' }); response.end(source.replace('profile: "private"', 'profile: "shared"')); return;
     }
     if (relative === 'data/demo-documents.js') { response.writeHead(200, { 'Content-Type': 'text/javascript' }); response.end('export const DEMO_DOCUMENTS = [];'); return; }
-    if (!['index.html', '404.html'].includes(relative) && !['js', 'styles', 'vendor'].includes(relative.split('/')[0])) deny(404, '찾을 수 없습니다.');
+    if (!['index.html', '404.html', 'privacy.html', 'terms.html'].includes(relative) && !['js', 'styles', 'vendor'].includes(relative.split('/')[0])) deny(404, '찾을 수 없습니다.');
     const file = await fs.realpath(path.join(appRoot, relative)).catch(() => deny(404, '찾을 수 없습니다.'));
     if (!file.startsWith(appRoot) || !(await fs.stat(file)).isFile()) deny(404, '찾을 수 없습니다.');
     response.setHeader('Content-Type', mime[path.extname(file)] || 'application/octet-stream');

@@ -150,7 +150,7 @@ async function validateSnapshot(staging, sourceDocuments, metadata) {
 
 async function stageSnapshot(staging, sourceDocuments, corpus, interrupted) {
   const inventory = await collectReleaseInventory("source", appRoot);
-  const runtimeFiles = inventory.filter((relative) => relative === "index.html" || relative === "404.html" || runtimeRoots.has(relative.split("/")[0]));
+  const runtimeFiles = inventory.filter((relative) => ["index.html", "404.html", "privacy.html", "terms.html"].includes(relative) || runtimeRoots.has(relative.split("/")[0]));
   assertAllowedReleasePaths("deploy", runtimeFiles);
   for (const relative of runtimeFiles) await copyRegular(path.join(appRoot, relative), path.join(staging, relative));
   await fs.writeFile(path.join(staging, "config.js"), publicConfig(await fs.readFile(path.join(appRoot, "config.js"), "utf8")), { flag: "wx" });

@@ -43,23 +43,27 @@ export class SharedDrive {
         while (this.accessTokens.size > 100) this.accessTokens.delete(this.accessTokens.keys().next().value);
         return token;
       }
-      catch {
+      catch (error) {
         this.accessTokens.delete(libraryId);
-        await this.db.query(`UPDATE df_connections SET status='reauthorize' WHERE library_id=$1`, [libraryId]);
-        deny(409, '호스트가 Google Drive를 다시 연결해야 합니다.');
+        if (error.response?.data?.error === 'invalid_grant') {
+          await this.db.query(`UPDATE df_connections SET status='reauthorize' WHERE library_id=$1`, [libraryId]);
+          deny(409, '호스트가 Google Drive를 다시 연결해야 합니다.');
+        }
+        deny(503, 'Google Drive에 일시적으로 연결하지 못했습니다. 잠시 뒤 자동으로 다시 시도합니다.');
       }
     })();
     this.refreshes.set(libraryId, next);
     try { return await next; } finally { this.refreshes.delete(libraryId); }
   }
-  async request(token, url, init = {}) {
+  async request(token, url, init = {}, retry = true) {
     const response = await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(120000), headers: { ...init.headers, Authorization: `Bearer ${token}` } });
     if (response.status === 401) {
       for (const [id, cached] of this.accessTokens) {
         if (cached.token !== token) continue;
-        this.accessTokens.delete(id); await this.db.query(`UPDATE df_connections SET status='reauthorize' WHERE library_id=$1`, [id]);
+        this.accessTokens.delete(id);
+        if (retry) return this.request(await this.token(id), url, init, false);
       }
-      deny(409, '호스트가 Google Drive를 다시 연결해야 합니다.');
+      deny(502, 'Google Drive 인증을 확인하지 못했습니다. 잠시 뒤 다시 시도하세요.');
     }
     if (!response.ok) throw new HttpError(response.status === 404 ? 404 : 502, response.status === 404 ? 'Drive 원문이 삭제되었거나 접근할 수 없습니다.' : 'Google Drive 요청을 완료하지 못했습니다. 잠시 뒤 다시 시도하세요.');
     return response;

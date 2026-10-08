@@ -6,7 +6,7 @@ COPY scripts ./scripts
 COPY js ./js
 COPY vendor ./vendor
 COPY styles ./styles
-COPY config.js index.html 404.html ./
+COPY config.js index.html 404.html privacy.html terms.html ./
 RUN mkdir data /data && printf 'export const DEMO_DOCUMENTS = [];\n' > data/demo-documents.js && chown node:node /data
 USER node
 ENV NODE_ENV=production DOCFINDER_DATA_DIR=/data PORT=4175

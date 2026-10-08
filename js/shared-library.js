@@ -9,7 +9,7 @@ export function createSharedLibrary({ onChange, notify }) {
     sharedPending: pending, sharedAccessError: accessError, documents: catalog?.documents || [], indexStats: catalog?.stats,
     sourceName: library?.name || '공유 문서함', libraryId: library?.id || '', lastSync: catalog?.lastSync,
     driveConnected: Boolean(catalog?.driveConnected), personalBusy: busy, personalProgress: progress,
-    connection: accessError || catalog?.stats?.failures ? 'error' : busy ? 'indexing' : session?.user ? 'connected' : 'idle' }; }
+    connection: accessError || catalog?.stats?.failures ? 'error' : busy ? 'indexing' : catalog?.driveConnected ? 'connected' : 'idle' }; }
   const emit = () => onChange(snapshot());
   function clear() {
     generation++; abort.abort(); abort = new AbortController(); library = undefined; catalog = undefined; pending = undefined; accessError = ''; busy = false; progress = '';
@@ -64,8 +64,15 @@ export function createSharedLibrary({ onChange, notify }) {
     new ResizeObserver(([entry]) => document.documentElement.style.setProperty('--shared-header-height', `${entry.target.getBoundingClientRect().height}px`)).observe(document.querySelector('.topbar'));
     session = await request('/api/session'); emit();
     if (session.user) await loadLibraries();
-    const result = new URLSearchParams(location.search).get('drive');
-    if (result) { notify(result === 'connected' ? 'Drive를 연결했습니다. 색인을 자동으로 생성합니다.' : 'Drive를 연결하지 못했습니다. 같은 계정으로 다시 연결하세요.'); history.replaceState(null, '', location.pathname); }
+    const connectionResult = new URLSearchParams(location.search); const result = connectionResult.get('drive');
+    if (result) {
+      const reasons = { access_denied: 'Google에서 Drive 연결을 허용하지 않았습니다. 접근 권한과 앱의 테스트 사용자 설정을 확인하세요.',
+        scope_missing: 'Drive 파일 접근 권한을 선택한 뒤 연결하세요.', refresh_missing: '지속적인 Drive 연결을 허용한 뒤 다시 연결하세요.',
+        account_mismatch: '로그인한 계정과 같은 Google 계정의 Drive를 연결하세요.', temporary: 'Google Drive에 일시적으로 연결하지 못했습니다. 잠시 뒤 다시 시도하세요.' };
+      notify(result === 'connected' ? 'Drive를 연결했습니다. 색인을 자동으로 생성합니다.' : result === 'sync-pending'
+        ? 'Drive 연결은 완료됐습니다. 목록 갱신은 자동으로 다시 시도합니다.' : reasons[connectionResult.get('drive_reason')] || 'Drive 연결을 완료하지 못했습니다. 연결을 다시 시도하세요.');
+      history.replaceState(null, '', location.pathname);
+    }
     setInterval(() => { if (!document.hidden) refresh(); }, 3000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     document.querySelector('#library-picker').addEventListener('change', (event) => choose(libraries.find((item) => item.id === event.target.value), true));
