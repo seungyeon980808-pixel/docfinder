@@ -1,7 +1,8 @@
+import { initialPreviewPosition } from "./preview-position.js?v=navigation-focus-1";
 import { findSearchMatches, highlightSegments, decorateMatch, joinTextRuns, rangesInSegments } from "./search-matches.js?v=phrase-map-2";
-import { clearPreviewNavigation, createPreviewNavigation, focusPageMatch } from "./preview-navigation.js?v=phrase-map-2";
+import { clearPreviewNavigation, createPreviewNavigation, focusPageMatch } from "./preview-navigation.js?v=navigation-focus-1";
 import { readPdfTextContent } from "./pdf-text-content.js?v=phrase-map-2";
-import { restorePageAnchor, trackPreviewViewport, stopPreviewViewport } from "./preview-viewport.js?v=phrase-map-2";
+import { restorePageAnchor, trackPreviewViewport, stopPreviewViewport } from "./preview-viewport.js?v=navigation-focus-1";
 
 import { previewSourceKey } from "./preview-cache.js?v=phrase-map-2";
 import { createRenderScheduler } from "./preview-scheduler.js?v=phrase-map-2";
@@ -42,14 +43,17 @@ export function clearPdfPreview() {
 export function updatePdfPreview(item, query) {
   const session = activeSession;
   if (!session?.goToPage || session.key !== previewSourceKey(item)) return false;
+  const position = initialPreviewPosition(item, query);
+  session.item = item;
+  session.restoreAnchor = position.anchor;
   session.query = query;
   session.navigation = createPreviewNavigation(item, query);
-  session.navigation.bind(session.goToPage);
+  session.navigation.bind((page, index) => { session.restoreAnchor = null; session.goToPage(page, index); });
   for (const page of session.rendered.keys()) {
     if (session.contents.has(page)) applyHighlights(session, page);
     else if (session.visible.has(page)) queuePage(session, page, 0);
   }
-  session.goToPage(item.page || 1, 0);
+  session.goToPage(position.page, position.matchIndex);
   return true;
 }
 
@@ -58,7 +62,8 @@ export async function renderLocalPdf(viewer, documentItem, getBytes, query = "")
   const scrollRoot = document.querySelector("#document-detail");
   const status = document.querySelector("#preview-page-status");
   const navigation = createPreviewNavigation(documentItem, query);
-  const session = { viewer, scrollRoot, status, navigation, query, key: previewSourceKey(documentItem), startedAt: performance.now(),
+  const position = initialPreviewPosition(documentItem, query);
+  const session = { viewer, scrollRoot, status, navigation, query, item: documentItem, restoreAnchor: position.anchor, key: previewSourceKey(documentItem), startedAt: performance.now(),
     scheduler: createRenderScheduler(2), contents: new Map(), rendered: new Map(), tasks: new Set(), visible: new Set(), layers: new Map(), textReaders: new Set() };
   activeSession = session;
   try {
@@ -88,10 +93,14 @@ export async function renderLocalPdf(viewer, documentItem, getBytes, query = "")
       session.pending = session.query ? { page: number, matchIndex } : null;
       node.scrollIntoView({ block: "start" });
       queuePage(session, node, 0);
+      if (!session.query && session.restoreAnchor) {
+        restorePageAnchor(scrollRoot, session.pages, session.restoreAnchor);
+        session.restoreAnchor = null;
+      }
       session.updateViewport();
     };
-    navigation.bind(session.goToPage);
-    session.goToPage(Math.max(1, Math.min(documentItem.page || 1, pdf.numPages)));
+    navigation.bind((page, index) => { session.restoreAnchor = null; session.goToPage(page, index); });
+    session.goToPage(Math.max(1, Math.min(position.page, pdf.numPages)), position.matchIndex);
     session.observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) {
@@ -156,9 +165,14 @@ function focusPending(session, node) {
   const page = Number(node.dataset.pageNumber);
   if (session.pending?.page !== page) return;
   const { matchIndex } = session.pending;
-  if (focusPageMatch(session.scrollRoot, node, matchIndex)) session.navigation.setMatch(page, matchIndex);
-  else session.navigation.note(page, "이 쪽은 원문 강조를 표시하지 못했습니다.");
+  session.navigation.setMatch(page, matchIndex);
+  if (!focusPageMatch(session.scrollRoot, node, matchIndex)) session.navigation.note(page, "이 쪽은 원문 강조를 표시하지 못했습니다.");
   session.pending = null;
+  if (session.restoreAnchor) {
+    restorePageAnchor(session.scrollRoot, session.pages, session.restoreAnchor);
+    session.restoreAnchor = null;
+  }
+  session.updateViewport();
 }
 
 function queuePage(session, node, priority = 10) {

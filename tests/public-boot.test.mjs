@@ -209,7 +209,8 @@ function runDelayedPublicSearchHarness(race = false) {
       "./index-health.js?v=phrase-map-2": { summarizeIndex: () => ({}) },
       "./shared-library.js?v=sharing-1": { createSharedLibrary() { throw new Error('Public profile must not create a shared library session'); } },
       "./pdf-editor.js": { openPdfEditor() {} },
-      "./render.js?v=phrase-map-2": { renderApp() {} },
+      "./render.js?v=navigation-focus-1": { renderApp() {} },
+      "./workspace-activity.js?v=navigation-focus-1": { installWorkspaceActivity() {} },
       "./rhwp-editor.js": { destroyRhwpEditor() {}, initRhwpEditor() {}, openRhwpEditor: async () => {} },
       "./search.js?v=phrase-map-2": {
         documentFormat: () => "pdf",

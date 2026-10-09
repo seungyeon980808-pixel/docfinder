@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { createRenderScheduler } from "../js/preview-scheduler.js";
+import { initialPreviewPosition } from "../js/preview-position.js";
 import { previewSourceKey } from "../js/preview-cache.js";
 
 function deferred() {
@@ -21,7 +22,7 @@ async function harness({ initialize, renderPage } = {}) {
     document: { querySelector: (selector) => selector === "#document-detail" ? root : status },
     IntersectionObserver: class { constructor(callback) { this.callback = callback; } observe(target) { this.callback([{ isIntersecting: true, target }]); } disconnect() {} },
     ResizeObserver: class { observe() {} disconnect() {} },
-    createRenderScheduler, previewSourceKey, performance, console,
+    createRenderScheduler, previewSourceKey, initialPreviewPosition, performance, console,
     trackPreviewViewport(session) { session.viewportWidth = 600; session.updateViewport = () => {}; session.onScroll = () => {}; },
     stopPreviewViewport() {}, capturePageAnchor() {}, restorePageAnchor() {},
     createPreviewNavigation: () => ({ bind() {}, setPage() {}, setMatch() {}, setMatches() {}, note() {} }),

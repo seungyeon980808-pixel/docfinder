@@ -1,9 +1,11 @@
-import { clearPdfPreview, localPdfMarkup, renderLocalPdf, updatePdfPreview } from "./pdf-preview.js?v=phrase-map-2";
-import { clearHwpPreview, renderHwpPreview, updateHwpPreview } from "./hwp-preview.js?v=phrase-map-2";
+import { clearPdfPreview, localPdfMarkup, renderLocalPdf, updatePdfPreview } from "./pdf-preview.js?v=navigation-focus-1";
+import { clearHwpPreview, renderHwpPreview, updateHwpPreview } from "./hwp-preview.js?v=navigation-focus-1";
 
 import { escapeHtml, highlightMarkup as highlight } from "./search-matches.js?v=phrase-map-2";
-import { clearPreviewNavigation } from "./preview-navigation.js?v=phrase-map-2";
+import { clearPreviewNavigation } from "./preview-navigation.js?v=navigation-focus-1";
 import { previewSourceKey } from "./preview-cache.js?v=phrase-map-2";
+import { setWorkspaceDocument } from "./workspace-activity.js?v=navigation-focus-1";
+import { clearPreviewPositions } from "./preview-position.js?v=navigation-focus-1";
 
 function formatDate(value) {
   if (!value) return "-";
@@ -81,7 +83,7 @@ function renderDocuments(state) {
   const showFolder = new Set(state.documents.map((item) => item.folder)).size > 1;
   const matchLabel = (item) => [
     showFolder ? escapeHtml(item.folder) : "",
-    item.matchedPages?.length ? `일치 페이지 ${item.matchedPages.length}개` : item.page ? `${item.page}쪽 일치` : state.mode === "content" && state.query && item.excerpt ? "본문 일치" : "",
+    item.matchedPages?.length ? `검색어 발견 ${item.matchedPages.length}쪽${item.matchedPages.every((entry) => entry.ranges?.length) ? ` · ${item.matchedPages.reduce((sum, entry) => sum + entry.ranges.length, 0)}곳` : ""}` : item.page ? `${item.page}쪽 일치` : state.mode === "content" && state.query && item.excerpt ? "본문 일치" : "",
     item.termCount > 1 ? `${item.matchedTermCount}/${item.termCount}개 포함 · ${item.samePage ? "같은 쪽" : "다른 쪽"}` : "",
     item.indexStatus === "indexing" ? "색인 중" : item.indexStatus === "error" ? "색인 재시도 필요" : item.indexStatus === "textless" ? "본문 텍스트 없음" : ""
   ].filter(Boolean).join(" · ");
@@ -89,7 +91,7 @@ function renderDocuments(state) {
     <div class="document-row${state.selectedId === item.id ? " is-selected" : ""}" data-result-id="${escapeHtml(item.id)}">
       <button class="document-select" type="button" data-document-id="${escapeHtml(item.id)}" aria-current="${state.selectedId === item.id ? "true" : "false"}">
         <span class="result-rank" aria-label="${index + 1}번째 결과">${String(index + 1).padStart(2, "0")}</span>
-        <span class="result-content"><span class="result-topline"><span class="document-name" title="${escapeHtml(item.name)}"><strong><i class="format-label">${escapeHtml(formatOf(item).toUpperCase())}</i>${highlight(item.name, state.mode === "name" ? state.query : "")}${item.isNew ? '<i class="new-label">새 문서</i>' : ""}</strong></span>${matchLabel(item) ? `<small class="result-match">${matchLabel(item)}</small>` : ""}</span>
+        <span class="result-content"><span class="result-topline"><span class="document-name" title="${escapeHtml(item.name)}"><strong><i class="format-label">${escapeHtml(formatOf(item).toUpperCase())}</i>${highlight(item.name, state.mode === "name" ? state.query : "")}${item.isNew ? '<i class="new-label">새 문서</i>' : ""}</strong>${state.selectedId === item.id ? '<span class="document-selection-label">선택됨</span>' : ""}</span>${matchLabel(item) ? `<small class="result-match">${matchLabel(item)}</small>` : ""}</span>
         <span class="result-subline">${resultPath(item) === item.folder ? "" : `<small class="result-path">${escapeHtml(resultPath(item))}</small>`}<time class="result-date">${formatDate(item.modifiedTime)}</time></span>
         ${state.mode === "content" && state.query && item.excerpt ? `<span class="result-excerpt">${highlight(item.excerpt, state.query)}</span>` : ""}</span>
       </button>
@@ -117,10 +119,12 @@ function renderDetail(state, getBytes) {
   const documentItem = state.results.find((candidate) => candidate.id === state.selectedId)
     || state.documents.find((candidate) => candidate.id === state.selectedId);
   const detail = document.querySelector("#document-detail");
+  setWorkspaceDocument(documentItem);
   if (!documentItem) {
     clearPdfPreview();
     clearHwpPreview(state.sharedMode);
     clearPreviewNavigation();
+    clearPreviewPositions();
     document.querySelector("#preview-page-status").hidden = true;
     detail.dataset.key = "";
     detail.dataset.sourceKey = "";
@@ -221,7 +225,7 @@ export function renderApp(state, getBytes) {
   document.querySelector("#search-submit").disabled = state.searching;
   document.querySelector("#result-summary").textContent = state.mode === "content" && state.query.trim() && !state.contentMatches
     ? state.searching ? "본문 검색 중" : "본문 검색 대기"
-    : state.query ? `검색 결과 ${state.results.length}개 · ${state.query}` : `${state.folder === "전체" ? "전체" : state.folder} ${state.results.length}개`;
+    : state.query ? `검색된 문서 ${state.results.length}개 · ${state.query}` : `${state.folder === "전체" ? "전체 문서" : state.folder} ${state.results.length}개`;
   document.querySelector("#sort-label").textContent = state.query.trim()
     ? "관련도순"
     : "최신 수정순";

@@ -1,7 +1,8 @@
+import { initialPreviewPosition } from "./preview-position.js?v=navigation-focus-1";
 import { hwpPageHighlights } from "./hwp-highlights.js?v=phrase-map-2";
 import { decorateMatch } from "./search-matches.js?v=phrase-map-2";
-import { clearPreviewNavigation, createPreviewNavigation, focusPageMatch } from "./preview-navigation.js?v=phrase-map-2";
-import { capturePageAnchor, restorePageAnchor, trackPreviewViewport, stopPreviewViewport } from "./preview-viewport.js?v=phrase-map-2";
+import { clearPreviewNavigation, createPreviewNavigation, focusPageMatch } from "./preview-navigation.js?v=navigation-focus-1";
+import { capturePageAnchor, restorePageAnchor, trackPreviewViewport, stopPreviewViewport } from "./preview-viewport.js?v=navigation-focus-1";
 import { previewSourceKey } from "./preview-cache.js?v=phrase-map-2";
 import { createRenderScheduler } from "./preview-scheduler.js?v=phrase-map-2";
 import { createHwpRenderer, destroyHwpRenderer } from "./hwp-renderer.js?v=phrase-map-2";
@@ -24,11 +25,14 @@ export function clearHwpPreview(release = false) {
 export function updateHwpPreview(item, query) {
   const session = activeSession;
   if (!session?.goToPage || session.key !== previewSourceKey(item)) return false;
+  const position = initialPreviewPosition(item, query);
+  session.item = item;
+  session.restoreAnchor = position.anchor;
   session.query = query;
   session.navigation = createPreviewNavigation(item, query);
-  session.navigation.bind(session.goToPage);
+  session.navigation.bind((page, index) => { session.restoreAnchor = null; session.goToPage(page, index); });
   for (const [node, record] of session.rendered) applyHighlights(session, node, record);
-  session.goToPage(item.page || 1, 0);
+  session.goToPage(position.page, position.matchIndex);
   return true;
 }
 
@@ -37,7 +41,8 @@ export async function renderHwpPreview(viewer, item, getBytes, query = "") {
   clearHwpPreview();
   const scrollRoot = document.querySelector("#document-detail");
   const status = document.querySelector("#preview-page-status");
-  const session = { viewer, scrollRoot, status, query, key: previewSourceKey(item),
+  const position = initialPreviewPosition(item, query);
+  const session = { viewer, scrollRoot, status, query, item, restoreAnchor: position.anchor, key: previewSourceKey(item),
     navigation: createPreviewNavigation(item, query), scheduler: createRenderScheduler(1),
     rendered: new Map(), visible: new Set(), startedAt: performance.now() };
   activeSession = session;
@@ -61,11 +66,15 @@ export async function renderHwpPreview(viewer, item, getBytes, query = "") {
       const record = session.rendered.get(node);
       if (record) { touchPage(session, node, record); focusPending(session, node); }
       else queuePage(session, node, 0);
+      if (!session.query && session.restoreAnchor) {
+        restorePageAnchor(scrollRoot, session.pages, session.restoreAnchor);
+        session.restoreAnchor = null;
+      }
       session.updateViewport();
     };
-    session.navigation.bind(session.goToPage);
+    session.navigation.bind((page, index) => { session.restoreAnchor = null; session.goToPage(page, index); });
     // Start the selected match first; nearby pages can follow after it.
-    session.goToPage(Math.max(1, Math.min(item.page || 1, pageCount)));
+    session.goToPage(Math.max(1, Math.min(position.page, pageCount)), position.matchIndex);
     session.observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) { session.visible.add(entry.target); queuePage(session, entry.target); }
@@ -116,9 +125,14 @@ function focusPending(session, node) {
   const image = node.querySelector("img");
   if (!image.complete) return;
   const { matchIndex } = session.pending;
-  if (focusPageMatch(session.scrollRoot, node, matchIndex)) session.navigation.setMatch(page, matchIndex);
-  else session.navigation.note(page, "이 쪽은 원문 강조 대신 검색된 본문을 표시합니다.");
+  session.navigation.setMatch(page, matchIndex);
+  if (!focusPageMatch(session.scrollRoot, node, matchIndex)) session.navigation.note(page, "이 쪽은 원문 강조 대신 검색된 본문을 표시합니다.");
   session.pending = null;
+  if (session.restoreAnchor) {
+    restorePageAnchor(session.scrollRoot, session.pages, session.restoreAnchor);
+    session.restoreAnchor = null;
+  }
+  session.updateViewport();
 }
 
 function applyHighlights(session, node, record) {

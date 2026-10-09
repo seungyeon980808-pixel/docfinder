@@ -1,3 +1,5 @@
+import { rememberPreviewPosition } from "./preview-position.js?v=navigation-focus-1";
+
 export function pageAtPosition(pages, top) {
   let low = 0;
   let high = pages.length - 1;
@@ -27,6 +29,9 @@ export function trackPreviewViewport(session, total) {
     const page = Number(pageAtPosition(pages, threshold)?.dataset.pageNumber || total);
     session.status.textContent = `${page} / ${total}쪽`;
     session.navigation.setPage(page, total);
+    rememberPreviewPosition(session.item, session.query, {
+      ...(session.navigation.selection?.() || { page, matchIndex: 0, termIndex: -1 }), anchor: session.anchor
+    });
   };
   session.onScroll = () => {
     if (session.scrollFrame) return;
@@ -36,6 +41,7 @@ export function trackPreviewViewport(session, total) {
 }
 
 export function stopPreviewViewport(session) {
+  if (session.pages?.length) session.updateViewport();
   session.scrollRoot.removeEventListener("scroll", session.onScroll);
   if (session.scrollFrame) cancelAnimationFrame(session.scrollFrame);
 }

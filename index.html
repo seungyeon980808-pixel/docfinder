@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#173b5b" />
     <title>DocFinder</title>
     <link rel="stylesheet" href="styles/base.css?v=phrase-map-2" />
-    <link rel="stylesheet" href="styles/app.css?v=phrase-map-2" />
+    <link rel="stylesheet" href="styles/app.css?v=navigation-focus-1" />
     <link rel="stylesheet" href="styles/responsive.css?v=phrase-map-2" />
     <script type="module">
       import { BUILD_PROFILE } from "./config.js?v=compact-live-1";
@@ -95,8 +95,11 @@
 
         <aside class="detail-panel" id="detail-panel" aria-label="선택한 문서 상세">
           <button class="mobile-back" type="button" id="detail-back">← 문서 목록</button>
+          <header class="preview-document-header" id="preview-document-header" hidden>
+            <strong id="preview-document-name"></strong><span id="preview-activity" role="status">선택한 문서</span>
+          </header>
           <div id="preview-controls" hidden></div>
-          <div id="document-detail"></div>
+          <div id="document-detail" tabindex="0" aria-label="선택한 문서 원문"></div>
           <nav id="preview-map" class="preview-location-map" aria-label="문서 전체 검색 위치" hidden></nav>
           <span class="preview-page-status" id="preview-page-status" role="status" hidden></span>
         </aside>
@@ -161,6 +164,6 @@
     <input id="local-library-input" type="file" accept=".pdf,.hwp,.hwpx" multiple hidden />
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-    <script type="module" src="js/app.js?v=phrase-map-2"></script>
+    <script type="module" src="js/app.js?v=navigation-focus-1"></script>
   </body>
 </html>

@@ -1,11 +1,12 @@
 import { BUILD_PROFILE, DEFAULT_CONFIG, resolvePublicSnapshotUrls } from "../config.js?v=compact-live-1";
 import { DEMO_DOCUMENTS } from "../data/demo-documents.js";
 import { createDetailPanelController } from "./detail-panel.js?v=verification-2";
+import { installWorkspaceActivity } from "./workspace-activity.js?v=navigation-focus-1";
 import { downloadDriveFile, DriveError } from "./drive-api.js";
 import { createSearchClient } from "./search-client.js?v=phrase-map-2";
 import { summarizeIndex } from "./index-health.js?v=phrase-map-2";
 import { openPdfEditor } from "./pdf-editor.js";
-import { renderApp } from "./render.js?v=phrase-map-2";
+import { renderApp } from "./render.js?v=navigation-focus-1";
 import { destroyRhwpEditor, initRhwpEditor, openRhwpEditor } from "./rhwp-editor.js";
 import { documentFormat, filterDocuments, matchProximity } from "./search.js?v=phrase-map-2";
 import { createStore, loadPublicSnapshot, loadSettings, saveSettings, selectSnapshotDocumentId } from "./store.js";
@@ -53,6 +54,7 @@ const store = createStore({
 });
 
 const detailPanel = createDetailPanelController();
+installWorkspaceActivity();
 const showToast = createToast();
 const searchClient = createSearchClient();
 let searchSequence = 0;

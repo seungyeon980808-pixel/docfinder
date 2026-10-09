@@ -1,6 +1,8 @@
 import { parseSearchTerms } from "./search.js?v=phrase-map-2";
 import { escapeHtml, highlightMarkup, termStyle, termStroke } from "./search-matches.js?v=phrase-map-2";
 
+import { initialPreviewPosition, rememberPreviewPosition } from "./preview-position.js?v=navigation-focus-1";
+
 let layoutObserver;
 
 export function matchingPages(documentItem) {
@@ -38,35 +40,45 @@ export function groupMapPages(entries, total, slots = 48) {
   return [...groups.values()];
 }
 
+export function filterMatchLocations(locations, termIndex = -1) {
+  return termIndex < 0 ? locations : locations.filter((entry) => (entry.termIndex ?? 0) === termIndex);
+}
+
 export function createPreviewNavigation(documentItem, query) {
   layoutObserver?.disconnect();
   const host = document.querySelector("#preview-controls");
   const map = document.querySelector("#preview-map");
   const matches = query.trim() ? matchingPages(documentItem).map((entry) => ({ ...entry })) : [];
+  const initial = initialPreviewPosition(documentItem, query);
   if (!host || !matches.length) { clearPreviewNavigation(); return { setPage() {}, setMatch() {}, setMatches() {}, bind() {}, note() {} }; }
   const terms = parseSearchTerms(query);
   let locations = matchingLocations(matches);
+  let termIndex = initial.termIndex >= 0 && initial.termIndex < terms.length ? initial.termIndex : -1;
+  let matchPage = initial.page;
+  let matchIndex = initial.matchIndex;
+  let page = initial.anchor?.page || matchPage;
+  let total = 0;
+  let navigate;
+  const notes = new Map();
+  const arrow = (direction) => `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="${direction === "previous" ? 'M8 13V3M4 7l4-4 4 4' : 'M8 3v10m-4-4 4 4 4-4'}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   host.hidden = false;
-  host.innerHTML = `<div class="preview-search-toolbar" role="group" aria-label="검색 일치 위치 이동">
+  host.innerHTML = `<div class="preview-search-toolbar" role="group" aria-label="이 문서의 검색 위치 이동">
     <span class="preview-match-count" role="status"></span><span class="preview-current-page"></span>
-    <button type="button" data-match-direction="previous" aria-label="이전 일치 위치" disabled>← 이전</button>
-    <button type="button" data-match-direction="next" aria-label="다음 일치 위치" disabled>다음 →</button>
-    <details class="preview-match-list"><summary>쪽 목록 ${matches.length}</summary><div class="preview-match-options">
+    <div class="preview-match-buttons"><button type="button" data-match-direction="previous" disabled>${arrow("previous")}이전 검색 위치</button>
+    <button type="button" data-match-direction="next" disabled>${arrow("next")}다음 검색 위치</button></div>
+    <details class="preview-match-list"><summary>검색된 쪽 ${matches.length}</summary><div class="preview-match-options">
       ${matches.map((entry) => `<button type="button" data-match-page="${entry.page}"><strong>${entry.page}쪽</strong><span>${highlightMarkup(entry.excerpt || "", query)}</span></button>`).join("")}
-    </div></details></div><div class="preview-term-legend" aria-label="검색어별 색상">${terms.map((term, index) =>
-      `<span style="${termStyle(index)}"><i>${index + 1}</i>${escapeHtml(term)}</span>`).join("")}</div><p class="preview-match-note" hidden></p>`;
+    </div></details></div><div class="preview-term-legend" role="group" aria-label="이 문서에서 이동할 검색어">${terms.length > 1 ? '<span class="preview-filter-label">이동 대상</span><button type="button" data-match-term="-1">전체 검색어</button>' : ''}${terms.map((term, index) =>
+      terms.length > 1 ? `<button type="button" data-match-term="${index}" style="${termStyle(index)}"><i>${index + 1}</i>${escapeHtml(term)}</button>` : `<span style="${termStyle(index)}"><i>${index + 1}</i>${escapeHtml(term)}</span>`).join("")}</div><p class="preview-match-note" hidden></p>`;
   const current = host.querySelector(".preview-current-page");
   const counter = host.querySelector(".preview-match-count");
   const list = host.querySelector("details");
   const previous = host.querySelector('[data-match-direction="previous"]');
   const next = host.querySelector('[data-match-direction="next"]');
-  let page = documentItem.page || matches[0].page;
-  let matchIndex = 0;
-  let total = 0;
-  let navigate;
-  const notes = new Map();
   let lastUpdate = "";
-  function position() { return locations.findIndex((entry) => entry.page === page && entry.matchIndex === matchIndex); }
+  const filtered = () => filterMatchLocations(locations, termIndex);
+  const position = () => filtered().findIndex((entry) => entry.page === matchPage && entry.matchIndex === matchIndex);
+  const selection = () => ({ page: matchPage, matchIndex, termIndex });
   function showNote() {
     const note = host.querySelector(".preview-match-note");
     const match = matches.find((entry) => entry.page === page);
@@ -75,24 +87,26 @@ export function createPreviewNavigation(documentItem, query) {
     note.innerHTML = message && match ? `${escapeHtml(message)} ${highlightMarkup(match.excerpt || "", query)}` : "";
   }
   function update() {
-    const key = `${page}:${matchIndex}:${total}:${locations.length}:${Boolean(navigate)}:${notes.get(page) || ""}`;
+    const choices = filtered();
+    const key = `${page}:${matchPage}:${matchIndex}:${termIndex}:${total}:${choices.length}:${Boolean(navigate)}:${notes.get(page) || ""}`;
     if (key === lastUpdate) return;
     lastUpdate = key;
     const index = position();
-    current.textContent = `${page} / ${total || "–"}쪽`;
-    counter.textContent = `일치 위치 ${index < 0 ? "–" : index + 1} / ${locations.length}`;
-    previous.disabled = !navigate || (index >= 0 ? index === 0 : !locations.some((entry) => entry.page < page));
-    next.disabled = !navigate || (index >= 0 ? index === locations.length - 1 : !locations.some((entry) => entry.page >= page));
-    host.querySelectorAll("[data-match-page]").forEach((button) => button.setAttribute("aria-current", Number(button.dataset.matchPage) === page ? "page" : "false"));
+    current.textContent = `현재 ${page}쪽 / 전체 ${total || "–"}쪽`;
+    counter.textContent = `이 문서의 검색 위치 ${index < 0 ? "–" : index + 1} / ${choices.length}곳`;
+    previous.disabled = !navigate || index <= 0;
+    next.disabled = !navigate || index < 0 || index === choices.length - 1;
+    host.querySelectorAll("[data-match-page]").forEach((button) => button.setAttribute("aria-current", Number(button.dataset.matchPage) === matchPage ? "page" : "false"));
+    host.querySelectorAll("[data-match-term]").forEach((button) => button.setAttribute("aria-pressed", String(Number(button.dataset.matchTerm) === termIndex)));
     const thumb = map?.querySelector(".preview-map-current");
-    if (thumb) { thumb.style.top = `${(page - 1) / total * 100}%`; thumb.style.height = `${Math.max(1.5, 100 / total)}%`; }
+    if (thumb && total) { thumb.style.top = `${(page - 1) / total * 100}%`; thumb.style.height = `${Math.max(1.5, 100 / total)}%`; }
     showNote();
   }
   function drawMap() {
     if (!map || !total) return;
     map.hidden = false;
     lastUpdate = "";
-    map.style.top = `${host.offsetHeight + (document.querySelector(".mobile-back")?.offsetHeight || 0) + 4}px`;
+    map.style.top = `${host.offsetTop + host.offsetHeight + 4}px`;
     const groups = groupMapPages(matches, total, Math.max(2, Math.min(48, Math.floor((map.clientHeight || 500) / 14))));
     map.innerHTML = `<span class="preview-map-label">1</span><div class="preview-map-track" style="--page-count:${total}">
       <span class="preview-map-current" aria-hidden="true"></span>${groups.map((group, index) => {
@@ -105,7 +119,7 @@ export function createPreviewNavigation(documentItem, query) {
       const index = event.target.closest("[data-map-group]")?.dataset.mapGroup;
       if (index === undefined || !navigate) return;
       const group = groups[Number(index)];
-      if (group.length === 1) go(group[0].page, 0);
+      if (group.length === 1) goToListedPage(group[0].page);
       else {
         const pages = new Set(group.map((entry) => entry.page));
         host.querySelectorAll("[data-match-page]").forEach((button) => { button.hidden = !pages.has(Number(button.dataset.matchPage)); });
@@ -114,52 +128,63 @@ export function createPreviewNavigation(documentItem, query) {
       }
     };
   }
-  function go(destination, index) {
+  function go(destination) {
+    if (!destination || !navigate) return;
     list.open = false;
-    page = destination;
-    matchIndex = index;
-    navigate(destination, index);
+    matchPage = destination.page;
+    matchIndex = destination.matchIndex;
+    page = matchPage;
+    rememberPreviewPosition(documentItem, query, { ...selection(), anchor: null });
+    navigate(matchPage, matchIndex);
     update();
+  }
+  function goToListedPage(destination) {
+    let match = filtered().find((entry) => entry.page === destination);
+    if (!match) { termIndex = -1; match = locations.find((entry) => entry.page === destination); }
+    go(match);
   }
   function setPage(value, pageCount) {
     const changedTotal = pageCount && pageCount !== total;
-    if (page !== value) { page = value; matchIndex = 0; }
+    page = value;
     total = pageCount || total;
     if (changedTotal) drawMap();
     update();
   }
   list.ontoggle = () => { if (!list.open) host.querySelectorAll("[data-match-page]").forEach((button) => { button.hidden = false; }); };
   host.onclick = (event) => {
-    const direction = event.target.closest("[data-match-direction]")?.dataset.matchDirection;
-    const target = event.target.closest("[data-match-page]")?.dataset.matchPage;
     if (!navigate) return;
-    if (target) return go(Number(target), 0);
-    if (!direction) return;
-    const index = position();
-    const destination = index >= 0 ? locations[index + (direction === "previous" ? -1 : 1)]
-      : direction === "previous" ? locations.filter((entry) => entry.page < page).at(-1) : locations.find((entry) => entry.page >= page);
-    if (destination) go(destination.page, destination.matchIndex);
+    const term = event.target.closest("[data-match-term]")?.dataset.matchTerm;
+    if (term !== undefined) {
+      termIndex = Number(term);
+      const choices = filtered();
+      go(choices.find((entry) => entry.page === matchPage && entry.matchIndex === matchIndex) || choices.find((entry) => entry.page >= page) || choices[0]);
+      update();
+      return;
+    }
+    const target = event.target.closest("[data-match-page]")?.dataset.matchPage;
+    if (target) return goToListedPage(Number(target));
+    const direction = event.target.closest("[data-match-direction]")?.dataset.matchDirection;
+    if (direction) go(filtered()[position() + (direction === "previous" ? -1 : 1)]);
   };
   host.onkeydown = (event) => {
     if (event.key === "Escape" && list.open) { list.open = false; list.querySelector("summary").focus(); event.stopPropagation(); }
   };
-  setPage(page);
+  update();
   if (map && typeof ResizeObserver === "function") {
     layoutObserver = new ResizeObserver(() => { drawMap(); update(); });
     layoutObserver.observe(host);
     layoutObserver.observe(map);
   }
   return {
-    setPage,
-    setMatch(value, index) { page = value; matchIndex = index; update(); },
+    setPage, selection,
+    setMatch(value, index) { matchPage = value; matchIndex = index; rememberPreviewPosition(documentItem, query, selection()); update(); },
     setMatches(value, ranges) {
       const entry = matches.find((entry) => entry.page === value);
       if (!entry) return;
       entry.ranges = ranges;
       entry.termIndices = [...new Set(ranges.map((range) => range.termIndex))];
       locations = matchingLocations(matches);
-      drawMap();
-      update();
+      drawMap(); update();
     },
     bind(callback) { navigate = callback; update(); },
     note(value, message) { notes.set(value, message); showNote(); }
