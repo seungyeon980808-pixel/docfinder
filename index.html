@@ -14,9 +14,10 @@
       import { BUILD_PROFILE } from "./config.js?v=compact-live-1";
 
       const isPublicProfile = BUILD_PROFILE.profile === "public";
+      const isGuestLink = BUILD_PROFILE.profile === "shared" && /^\/p\/[a-f0-9]{64}$/u.test(location.pathname);
       const isPersonalPreview = new URLSearchParams(location.search).has("personal") && !isPublicProfile;
       document.documentElement.dataset.profile = BUILD_PROFILE.profile === "local" && !isPersonalPreview ? "local" : isPublicProfile ? "public" : "private";
-      if (BUILD_PROFILE.profile !== "public" && (BUILD_PROFILE.profile !== "local" || isPersonalPreview)) {
+      if (!isGuestLink && BUILD_PROFILE.profile !== "public" && (BUILD_PROFILE.profile !== "local" || isPersonalPreview)) {
         const googleIdentity = document.createElement("script");
         googleIdentity.src = "https://accounts.google.com/gsi/client";
         googleIdentity.async = true;
@@ -112,11 +113,28 @@
       <p><small><a href="/privacy.html" target="_blank" rel="noopener">개인정보 처리 안내</a> · <a href="/terms.html" target="_blank" rel="noopener">서비스 이용 안내</a></small></p>
     </dialog>
     <dialog class="sharing-dialog" id="sharing-dialog" aria-labelledby="sharing-title">
-      <header><div><small>초대한 사람만 열람</small><h2 id="sharing-title">공유 관리</h2></div><button type="button" class="dialog-close" data-close-shared-dialog aria-label="공유 관리 닫기">×</button></header>
+      <header><h2 id="sharing-title">공유 관리</h2><button type="button" class="dialog-close" data-close-shared-dialog aria-label="공유 관리 닫기">×</button></header>
+      <section class="public-sharing" aria-labelledby="public-sharing-title">
+        <h3 id="public-sharing-title">로그인 없는 링크</h3>
+        <p>링크를 가진 누구나 선택한 자료를 검색·열람·다운로드할 수 있습니다. 링크는 다른 사람에게 전달될 수 있습니다.</p>
+        <form id="public-link-form">
+          <label for="public-share-name">공유 이름</label><input id="public-share-name" maxlength="100" required />
+          <div class="public-share-options"><div><label for="public-share-scope">공유 범위</label><select id="public-share-scope"><option value="files">선택한 파일만</option><option id="public-share-folder-option" value="folder">연결한 폴더</option></select></div><div><label for="public-share-expiry">만료일</label><select id="public-share-expiry"><option value="7">7일 후</option><option value="30">30일 후</option><option value="0">만료 없음</option></select></div></div>
+          <div id="public-share-file-picker"><div class="public-share-file-tools"><strong>공유할 파일</strong><div><button type="button" class="secondary-button" id="public-share-select-all">전체 선택</button><button type="button" class="secondary-button" id="public-share-select-none">선택 해제</button></div></div><div id="public-share-files" role="group" aria-label="공유할 파일 선택"></div></div>
+          <div id="public-share-folder-preview" hidden><p id="public-share-folder-name"></p><ul id="public-share-folder-files" aria-label="폴더에서 공유할 파일"></ul></div>
+          <label id="public-share-new-row" class="public-file-choice" hidden><input id="public-share-new" type="checkbox" /><span>새 파일도 자동 공유</span></label>
+          <p id="public-share-summary" role="status"></p><button type="submit" id="public-link-create" class="public-link-primary">공유 링크 만들기</button>
+        </form>
+        <p id="public-share-status" role="status" aria-live="polite"></p>
+        <div id="public-link-result" hidden><label for="public-link-value">로그인 없는 공유 링크</label><div class="sharing-input-row"><input id="public-link-value" readonly /><button type="button" id="copy-public-link">링크 복사</button></div></div>
+        <details class="public-links-history"><summary>만든 링크 관리</summary><ul id="public-links-list" aria-label="로그인 없는 공유 링크 목록"></ul><small>재발급·해제하면 기존 링크의 이후 접근이 차단됩니다. 이미 저장한 파일은 회수되지 않습니다.</small></details>
+      </section>
+      <details class="invited-sharing"><summary>초대한 Google 계정만 열람</summary>
       <p>초대한 Google 계정만 검색·미리보기·다운로드할 수 있습니다. Gmail과 Google Workspace 계정을 지원합니다.</p>
       <form id="sharing-form"><label for="invite-email">초대할 이메일</label><div class="sharing-input-row"><input id="invite-email" type="email" required maxlength="254" autocomplete="off" placeholder="name@gmail.com" /><button type="submit">초대 등록</button></div></form>
       <ul id="sharing-members" aria-label="초대 목록"></ul>
       <footer><label for="sharing-link">문서함 링크</label><div class="sharing-input-row"><input id="sharing-link" readonly /><button type="button" id="copy-library-link">링크 복사</button></div><small>초대를 등록한 뒤 링크를 직접 전달하세요. 권한을 회수하면 이후 접근이 차단됩니다.</small></footer>
+      </details>
     </dialog>
     <dialog class="sharing-dialog" id="folder-dialog" aria-labelledby="folder-title">
       <header><h2 id="folder-title">기존 Drive 폴더 연결</h2><button type="button" class="dialog-close" data-close-shared-dialog aria-label="폴더 연결 창 닫기">×</button></header>

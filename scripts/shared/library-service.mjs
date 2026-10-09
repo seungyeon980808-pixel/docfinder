@@ -132,6 +132,7 @@ export class LibraryService {
     }
     await this.db.transaction(async (tx) => {
       await tx.query('SELECT id FROM df_libraries WHERE id=$1 FOR UPDATE', [id]);
+      await tx.query("UPDATE df_public_links SET revoked_at=now() WHERE library_id=$1 AND scope='folder' AND folder_id<>$2 AND revoked_at IS NULL", [id, folderId]);
       await tx.query(`DELETE FROM df_documents WHERE library_id=$1 AND metadata ? 'sourceFolderId' AND metadata->>'sourceFolderId'<>$2`, [id, folderId]);
       await tx.query(`INSERT INTO df_folder_sources(library_id,folder_id,name,status) VALUES($1,$2,$3,'ready') ON CONFLICT(library_id) DO UPDATE SET folder_id=excluded.folder_id,name=excluded.name,status='ready',synced_at=NULL,last_error=''`, [id, folderId, folder.name]);
       await tx.query('DELETE FROM df_folder_requests WHERE library_id=$1', [id]);
@@ -145,6 +146,7 @@ export class LibraryService {
     await this.permission(user, id, true);
     await this.db.transaction(async (tx) => {
       await tx.query('SELECT id FROM df_libraries WHERE id=$1 FOR UPDATE', [id]);
+      await tx.query("UPDATE df_public_links SET revoked_at=now() WHERE library_id=$1 AND scope='folder' AND revoked_at IS NULL", [id]);
       await tx.query("DELETE FROM df_documents WHERE library_id=$1 AND metadata ? 'sourceFolderId'", [id]);
       await tx.query('DELETE FROM df_folder_sources WHERE library_id=$1', [id]);
       await tx.query('DELETE FROM df_folder_requests WHERE library_id=$1', [id]);

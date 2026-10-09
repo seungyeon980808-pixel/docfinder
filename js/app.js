@@ -129,7 +129,7 @@ async function getPersonalLibrary() {
   }).catch((error) => { personalControllerPromise = undefined; throw error; });
   return personalControllerPromise;
 }
-const deepLinkedId = location.hash.startsWith("#doc=") ? location.hash.slice(5) : "";
+const deepLinkedId = new URLSearchParams(location.hash.slice(1)).get("doc") || "";
 const publicSnapshotUrls = resolvePublicSnapshotUrls();
 
 async function loadPublishedCatalog() {
@@ -333,8 +333,8 @@ async function runRowAction(action, documentItem) {
   if (action === "download") return downloadDocument(documentItem);
   if (action === "original") return openDocumentOriginal(documentItem);
   if (action === "link") {
-    const url = store.get().sharedMode ? new URL(`/s/${store.get().sharedLibrary.share_id}`, location.origin) : new URL(location.href);
-    url.hash = `doc=${documentItem.id}`;
+    const url = store.get().sharedMode && !store.get().sharedGuest ? new URL(`/s/${store.get().sharedLibrary.share_id}`, location.origin) : new URL(location.href);
+    const fragment = new URLSearchParams(url.hash.slice(1)); fragment.set("doc", documentItem.id); url.hash = fragment.toString();
     await navigator.clipboard.writeText(url.href);
     showToast("문서 링크를 복사했습니다.");
     return;

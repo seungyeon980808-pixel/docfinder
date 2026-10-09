@@ -12,8 +12,13 @@ CREATE TABLE IF NOT EXISTS df_folder_requests (library_id text PRIMARY KEY REFER
 CREATE TABLE IF NOT EXISTS df_documents (library_id text REFERENCES df_libraries(id) ON DELETE CASCADE, id text NOT NULL, metadata jsonb NOT NULL, version text NOT NULL, status text NOT NULL DEFAULT 'indexing', pages jsonb NOT NULL DEFAULT '[]', PRIMARY KEY(library_id,id));
 CREATE TABLE IF NOT EXISTS df_jobs (id text PRIMARY KEY, library_id text NOT NULL, document_id text NOT NULL, version text NOT NULL, status text NOT NULL DEFAULT 'pending', attempts integer NOT NULL DEFAULT 0, available_at timestamptz NOT NULL DEFAULT now(), lease_until timestamptz, lease_owner text, FOREIGN KEY(library_id,document_id) REFERENCES df_documents(library_id,id) ON DELETE CASCADE, UNIQUE(library_id,document_id,version));
 CREATE TABLE IF NOT EXISTS df_uploads (library_id text REFERENCES df_libraries(id), id text NOT NULL, name text NOT NULL, size bigint NOT NULL, status text NOT NULL DEFAULT 'pending', document_id text, lease_until timestamptz, PRIMARY KEY(library_id,id));
+CREATE TABLE IF NOT EXISTS df_public_links (id text PRIMARY KEY, library_id text NOT NULL REFERENCES df_libraries(id) ON DELETE CASCADE, name text NOT NULL, scope text NOT NULL CHECK(scope IN ('files','folder')), folder_id text, include_new boolean NOT NULL DEFAULT false, secret_hash text NOT NULL, secret_encrypted text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz, revoked_at timestamptz, UNIQUE(id,library_id), CHECK((scope='files' AND folder_id IS NULL AND NOT include_new) OR (scope='folder' AND folder_id IS NOT NULL)));
+CREATE TABLE IF NOT EXISTS df_public_link_documents (link_id text NOT NULL, library_id text NOT NULL, document_id text NOT NULL, source_folder_id text NOT NULL DEFAULT '', PRIMARY KEY(link_id,document_id), FOREIGN KEY(link_id,library_id) REFERENCES df_public_links(id,library_id) ON DELETE CASCADE, FOREIGN KEY(library_id,document_id) REFERENCES df_documents(library_id,id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS df_guest_sessions (hash text PRIMARY KEY, link_id text NOT NULL REFERENCES df_public_links(id) ON DELETE CASCADE, expires_at timestamptz NOT NULL);
 CREATE INDEX IF NOT EXISTS df_invite_user ON df_invites(user_id,status);
 CREATE INDEX IF NOT EXISTS df_job_pending ON df_jobs(status,available_at);
+CREATE INDEX IF NOT EXISTS df_public_link_library ON df_public_links(library_id,created_at);
+CREATE INDEX IF NOT EXISTS df_guest_session_expiry ON df_guest_sessions(expires_at);
 `;
 
 export async function createDatabase({ url, directory } = {}) {

@@ -61,9 +61,9 @@ function renderDocuments(state) {
   if (state.sharedMode && state.sharedPending) { list.replaceChildren(); return; }
   if (!state.results.length) {
     if (state.sharedMode && !state.documents.length && !state.sharedPending) {
-      const title = state.sharedAccessError ? "문서함을 열 수 없습니다" : !state.sharedUser ? "Google 계정으로 시작하세요" : state.sharedLibrary?.role === "owner" ? "내 자료로 시작하세요" : "등록된 문서가 없습니다";
-      const copy = state.sharedAccessError || (!state.sharedUser ? "내 자료를 올리거나 초대받은 문서함을 열람할 수 있습니다." : state.sharedLibrary?.role === "owner" ? "Drive를 연결하고 PDF·HWP·HWPX를 업로드하세요. 본문 색인은 자동으로 생성됩니다." : "호스트가 파일을 올리면 여기에 표시됩니다.");
-      list.innerHTML = `<div class="personal-empty"><span class="personal-empty-kicker">${state.sharedLibrary?.role === "owner" ? "내 문서함" : "공유 문서함"}</span><h2>${title}</h2><p>${escapeHtml(copy)}</p>${!state.sharedUser ? '<small>초대받았다면 초대에 등록된 계정으로 로그인하세요.</small>' : ''}</div>`;
+      const title = state.sharedAccessError ? "문서함을 열 수 없습니다" : state.sharedGuest ? state.sharedLibrary ? "공유된 파일이 없습니다" : "공유 자료를 불러오는 중입니다" : !state.sharedUser ? "Google 계정으로 시작하세요" : state.sharedLibrary?.role === "owner" ? "내 자료로 시작하세요" : "등록된 문서가 없습니다";
+      const copy = state.sharedAccessError || (state.sharedGuest ? state.sharedLibrary ? "호스트가 공유한 파일이 여기에 표시됩니다." : "잠시만 기다려 주세요." : !state.sharedUser ? "내 자료를 올리거나 초대받은 문서함을 열람할 수 있습니다." : state.sharedLibrary?.role === "owner" ? "Drive를 연결하고 PDF·HWP·HWPX를 업로드하세요. 본문 색인은 자동으로 생성됩니다." : "호스트가 파일을 올리면 여기에 표시됩니다.");
+      list.innerHTML = `<div class="personal-empty"><h2>${title}</h2><p>${escapeHtml(copy)}</p>${!state.sharedUser && !state.sharedGuest ? '<small>초대받았다면 초대에 등록된 계정으로 로그인하세요.</small>' : ''}</div>`;
       return;
     }
     if (state.personalMode && !state.documents.length && !state.query.trim()) {
@@ -168,7 +168,7 @@ function renderConnection(state) {
   upload.hidden = !state.personalMode && !(state.sharedMode && state.sharedLibrary?.role === "owner");
   upload.disabled = !state.driveConnected || state.personalBusy;
   document.querySelector("#disconnect-button").hidden = !state.driveConnected || state.sharedMode && state.sharedLibrary?.role !== "owner";
-  if (state.sharedMode) status.querySelector("span").textContent = state.personalBusy ? "업로드 중" : state.sharedUser ? state.sharedLibrary?.role === "reader" ? "열람자" : state.sharedFolderSource ? state.sharedFolderSource.status === 'ready' ? `폴더 연결 · ${state.sharedFolderSource.name}` : "폴더 연결 확인 필요" : state.driveConnected ? "Drive 연결됨" : "Drive 연결 필요" : "로그인 필요";
+  if (state.sharedMode) status.querySelector("span").textContent = state.sharedGuest ? state.sharedAccessError ? "공유 링크 확인 필요" : "링크 열람 · 읽기 전용" : state.personalBusy ? "업로드 중" : state.sharedUser ? state.sharedLibrary?.role === "reader" ? "열람자" : state.sharedFolderSource ? state.sharedFolderSource.status === 'ready' ? `폴더 연결 · ${state.sharedFolderSource.name}` : "폴더 연결 확인 필요" : state.driveConnected ? "Drive 연결됨" : "Drive 연결 필요" : "로그인 필요";
   const picker = document.querySelector("#library-picker");
   picker.hidden = !state.sharedMode || !state.sharedUser;
   const options = (state.sharedLibraries || []).map((item) => `<option value="${escapeHtml(item.id)}">${item.role === "owner" ? "내 문서함" : "초대받은 문서함"} · ${escapeHtml(item.name)}${item.status === "pending" ? " (참여 대기)" : ""}</option>`).join('');
@@ -176,7 +176,7 @@ function renderConnection(state) {
   if (state.sharedLibrary) picker.value = state.sharedLibrary.id;
   document.querySelector("#share-button").hidden = !state.sharedMode || state.sharedLibrary?.role !== "owner";
   document.querySelector("#folder-connect-button").hidden = !state.sharedMode || state.sharedLibrary?.role !== "owner";
-  document.querySelector("#google-login-button").hidden = !state.sharedMode;
+  document.querySelector("#google-login-button").hidden = !state.sharedMode || Boolean(state.sharedGuest);
   document.querySelector("#google-login-button").textContent = state.sharedUser ? "계정 바꾸기" : "Google 로그인";
   document.querySelector("#shared-logout-button").hidden = !state.sharedMode || !state.sharedUser;
   document.querySelector("#shared-logout-button").title = state.sharedUser?.email || '';
@@ -212,7 +212,7 @@ function renderNotice(state) {
 export function renderApp(state, getBytes) {
   document.title = state.settings.appName;
   document.querySelector(".brand-mark").textContent = state.settings.appName;
-  document.querySelector("#organization-name").textContent = state.sharedMode ? "초대 문서함" : state.settings.organization;
+  document.querySelector("#organization-name").textContent = state.sharedMode ? state.sharedGuest ? state.sourceName : "공유 문서함" : state.settings.organization;
   document.querySelector("#total-count").textContent = String(state.documents.length);
   document.querySelector("#source-name").textContent = state.sourceName;
   document.querySelector("#source-path").textContent = state.publicMode ? "게시된 공개 스냅샷" : state.localMode ? "이 컴퓨터의 동기화 폴더" : state.settings.demoMode ? "Google Drive 연결 전" : state.settings.rootFolderId || "폴더 설정 필요";

@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { LibraryService } from './library-service.mjs';
+import { PublicLinks } from './public-links.mjs';
 import { SharedDrive } from './google-drive.mjs';
 import { googleVerifier, opaque, digest, csrfFor, equal, deny, HttpError } from './security.mjs';
 import { createJobs } from './jobs.mjs';
@@ -15,11 +16,12 @@ const appRoot = fileURLToPath(new URL('../../', import.meta.url));
 const mime = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream' };
 const safeId = (id) => /^[a-zA-Z0-9_-]{1,128}$/u.test(id);
 const cookieToken = (request) => /(?:^|;\s*)df_session=([a-f0-9]{64})(?:;|$)/u.exec(request.headers.cookie || '')?.[1];
+const guestCookieToken = (request) => /(?:^|;\s*)df_guest=([a-f0-9]{64})(?:;|$)/u.exec(request.headers.cookie || '')?.[1];
 async function jsonBody(request) {
   if (!String(request.headers['content-type']).startsWith('application/json')) deny(415, 'JSON 요청이 필요합니다.');
   let size = 0; const chunks = [];
   for await (const chunk of request) { size += chunk.length; if (size > 65536) deny(413, '요청이 너무 큽니다.'); chunks.push(chunk); }
-  try { return JSON.parse(Buffer.concat(chunks).toString()); } catch { deny(400, '요청 형식을 확인하세요.'); }
+  try { const value = JSON.parse(Buffer.concat(chunks).toString()); if (!value || typeof value !== 'object' || Array.isArray(value)) deny(400, '요청 형식을 확인하세요.'); return value; } catch { deny(400, '요청 형식을 확인하세요.'); }
 }
 
 export async function createSharedServer({ db, key, origin, clientId = '', clientSecret = '', dataRoot, maxFileBytes = 128 * 1024 * 1024, folderCredentials, verify, drive: providedDrive, jobs: jobsEnabled = true, extract } = {}) {
@@ -28,9 +30,22 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
   if (!secure && !['localhost', '127.0.0.1', '[::1]'].includes(site.hostname)) throw new Error('HTTPS origin required');
   const drive = providedDrive || new SharedDrive({ db, key, origin, clientId, clientSecret, maxFileBytes, folderCredentials });
   const service = new LibraryService(db, drive, maxFileBytes); const verifyIdentity = verify || googleVerifier(clientId);
+  const publicLinks = new PublicLinks({ db, service, key });
   const uploadsRoot = path.join(dataRoot, 'uploads'); await fs.mkdir(uploadsRoot, { recursive: true, mode: 0o700 });
   const jobs = jobsEnabled ? createJobs({ db, drive, service, extract }) : null;
   const rates = new Map();
+  const guestRates = new Map();
+  const guestDownloads = new Map();
+  function limitGuest(ip, exchange, response) {
+    const minute = Math.floor(Date.now() / 60000); const key = `${ip}:guest${exchange ? '-exchange' : ''}`;
+    if (!guestRates.has(key) && guestRates.size >= 10000) {
+      for (const [entry, value] of guestRates) if (value.minute < minute) guestRates.delete(entry);
+      if (guestRates.size >= 10000) { response.setHeader('Retry-After', '60'); deny(429, '요청이 많습니다. 1분 뒤 다시 시도하세요.'); }
+    }
+    const previous = guestRates.get(key); const count = previous?.minute === minute ? previous.count + 1 : 1;
+    guestRates.set(key, { minute, count });
+    if (count > (exchange ? 30 : 120)) { response.setHeader('Retry-After', '60'); deny(429, '요청이 많습니다. 1분 뒤 다시 시도하세요.'); }
+  }
   async function session(request) {
     const token = cookieToken(request); if (!token) return;
     const row = (await db.query(`SELECT s.hash,s.expires_at,u.id,u.email,u.name FROM df_sessions s LEFT JOIN df_users u ON u.id=s.user_id WHERE s.hash=$1 AND s.expires_at>now()`, [digest(token)])).rows[0];
@@ -71,6 +86,42 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
     if (pathname === '/favicon.ico' && request.method === 'GET') { response.writeHead(204); response.end(); return; }
     if (pathname.includes('\\') || pathname.includes('\0') || pathname.split('/').some((part) => part === '..')) deny(404, '찾을 수 없습니다.');
     if (url.pathname.startsWith('/api/')) {
+      if (pathname.startsWith('/api/public-links/')) {
+        const guest = /^\/api\/public-links\/([a-f0-9]{64})(?:\/(.*))?$/u.exec(pathname);
+        if (!guest) deny(404, '찾을 수 없습니다.');
+        const id = guest[1]; const action = guest[2] || ''; const token = guestCookieToken(request);
+        limitGuest(ip, false, response);
+        if (action === 'session' && request.method === 'POST') {
+          limitGuest(ip, true, response);
+          if (request.headers.origin !== origin) deny(403, '이 사이트에서 공유 링크를 열어 주세요.');
+          const body = await jsonBody(request); const guestToken = await publicLinks.exchange(id, body.token);
+          response.setHeader('Set-Cookie', `df_guest=${guestToken}; Path=/api/public-links/${id}; HttpOnly; SameSite=Lax; Max-Age=3600${secure ? '; Secure' : ''}`);
+          return write(response, 200, { ready: true });
+        }
+        if (request.method !== 'GET') deny(405, '공유 링크는 열람만 가능합니다.');
+        if (!action) return write(response, 200, await publicLinks.catalog(id, token));
+        if (action === 'search') return write(response, 200, { documents: await publicLinks.search(id, token, url.searchParams.get('q') || '', url.searchParams.get('mode') || 'content') });
+        const original = /^documents\/([a-zA-Z0-9_-]{1,128})\/original$/u.exec(action);
+        if (original) {
+          const active = guestDownloads.get(ip) || 0;
+          if (active >= 4) { response.setHeader('Retry-After', '5'); deny(429, '문서를 준비하고 있습니다. 잠시 뒤 다시 시도하세요.'); }
+          guestDownloads.set(ip, active + 1);
+          let released = false;
+          const release = () => { if (released) return; released = true; const remaining = (guestDownloads.get(ip) || 1) - 1; if (remaining) guestDownloads.set(ip, remaining); else guestDownloads.delete(ip); };
+          response.once('finish', release); response.once('close', release);
+          try {
+            const row = await publicLinks.document(id, token, original[1]);
+            if (Number(row.metadata.size) > maxFileBytes) deny(413, '열람 가능한 파일 크기를 초과했습니다.');
+            if (url.searchParams.get('version') && url.searchParams.get('version') !== digest(row.version)) deny(409, '문서가 변경되었습니다. 목록을 새로고침하세요.');
+            const bytes = await drive.bytes(row.libraryId, original[1]);
+            const latest = await publicLinks.document(id, token, original[1]);
+            if (latest.version !== row.version) deny(409, '문서가 변경되었습니다. 목록을 새로고침하세요.');
+            if (bytes.length > maxFileBytes) deny(413, '열람 가능한 파일 크기를 초과했습니다.');
+            response.writeHead(200, { 'Content-Type': row.metadata.format === 'pdf' ? 'application/pdf' : 'application/octet-stream', 'Content-Length': bytes.length, 'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(row.metadata.name)}` }); response.end(bytes); return;
+          } finally { if (!response.headersSent) release(); }
+        }
+        deny(404, '찾을 수 없습니다.');
+      }
       let current = await session(request);
       if (request.method === 'GET' && pathname === '/api/session') {
         current ||= await newSession(response);
@@ -121,6 +172,11 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
       if (request.method === 'GET' && action === 'invitations') return write(response, 200, { invitations: await service.invitations(user, id) });
       if (request.method === 'POST' && action === 'invitations') { const { email } = await jsonBody(request); await service.invite(user, id, email); return write(response, 201, { invited: true }); }
       if (request.method === 'DELETE' && action.startsWith('invitations/')) { await service.revoke(user, id, action.slice('invitations/'.length)); return write(response, 200, { revoked: true }); }
+      if (action === 'public-links' && request.method === 'GET') return write(response, 200, { links: await publicLinks.list(user, id) });
+      if (action === 'public-links' && request.method === 'POST') return write(response, 201, { link: await publicLinks.create(user, id, await jsonBody(request)) });
+      const publicLink = /^public-links\/([a-f0-9]{64})(?:\/(reissue))?$/u.exec(action);
+      if (publicLink && request.method === 'DELETE' && !publicLink[2]) { await publicLinks.revoke(user, id, publicLink[1]); return write(response, 200, { revoked: true }); }
+      if (publicLink?.[2] && request.method === 'POST') return write(response, 200, await publicLinks.rotate(user, id, publicLink[1]));
       await service.permission(user, id);
       if (action === 'folder' && request.method === 'GET') return write(response, 200, await service.folderSettings(user, id));
       if (action === 'folder' && request.method === 'POST') { const { url } = await jsonBody(request); return write(response, 200, await service.connectFolder(user, id, url)); }
@@ -188,7 +244,7 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
     }
     if (!['GET', 'HEAD'].includes(request.method)) deny(405, '허용되지 않은 요청입니다.');
     let relative = pathname.slice(1);
-    if (pathname === '/' || /^\/s\/[a-f0-9]{64}$/u.test(pathname)) relative = 'index.html';
+    if (pathname === '/' || /^\/(s|p)\/[a-f0-9]{64}$/u.test(pathname)) relative = 'index.html';
     if (relative === 'config.js') {
       const source = await fs.readFile(path.join(appRoot, 'config.js'), 'utf8');
       response.writeHead(200, { 'Content-Type': 'text/javascript' }); response.end(source.replace('profile: "private"', 'profile: "shared"')); return;
@@ -209,5 +265,5 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
     });
   });
   server.requestTimeout = 300000;
-  return { server, service, drive, jobs, async close() { await jobs?.stop(); await new Promise((resolve) => server.close(resolve)); } };
+  return { server, service, publicLinks, drive, jobs, async close() { await jobs?.stop(); await new Promise((resolve) => server.close(resolve)); } };
 }

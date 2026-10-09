@@ -1,10 +1,15 @@
 import { escapeHtml } from './search-matches.js';
+import { createGuestLibrary } from './guest-library.js';
+import { createPublicSharing } from './public-sharing.js';
 
 export function createSharedLibrary({ onChange, notify }) {
+  const publicId = /^\/p\/([a-f0-9]{64})$/u.exec(location.pathname)?.[1];
+  if (publicId) return createGuestLibrary({ id: publicId, onChange, notify });
   let session; let libraries = []; let library; let catalog; let pending; let accessError = '';
   let generation = 0; let abort = new AbortController(); let polling = false; let busy = false; let progress = '';
   const uploads = new Map();
   const shareId = /^\/s\/([a-f0-9]{64})$/u.exec(location.pathname)?.[1];
+  const publicSharing = createPublicSharing({ request, notify, context: () => ({ library, catalog, generation }) });
   function snapshot() { return { sharedUser: session?.user, sharedConfigured: session?.configured, sharedLibraries: libraries, sharedLibrary: library,
     sharedPending: pending, sharedAccessError: accessError, documents: catalog?.documents || [], indexStats: catalog?.stats,
     sourceName: library?.name || '공유 문서함', libraryId: library?.id || '', lastSync: catalog?.lastSync,
@@ -14,6 +19,7 @@ export function createSharedLibrary({ onChange, notify }) {
   function clear() {
     generation++; abort.abort(); abort = new AbortController(); library = undefined; catalog = undefined; pending = undefined; accessError = ''; busy = false; progress = '';
     document.querySelector('#sharing-dialog').close(); document.querySelector('#sharing-members').replaceChildren(); document.querySelector('#sharing-link').value = ''; document.querySelector('#invite-email').value = ''; emit();
+    publicSharing.reset();
     document.querySelector('#folder-dialog').close(); document.querySelector('#folder-reader-email').value = ''; document.querySelector('#folder-url').value = ''; document.querySelector('#folder-proof-content').value = ''; document.querySelector('#folder-proof-name').value = '';
   }
   async function request(url, { method = 'GET', body, signal = abort.signal } = {}) {
@@ -150,7 +156,8 @@ export function createSharedLibrary({ onChange, notify }) {
   }
   async function sharing() {
     if (library?.role !== 'owner') return;
-    try { await members(); document.querySelector('#sharing-title').textContent = library.name; document.querySelector('#sharing-link').value = new URL(`/s/${library.share_id}`, location.origin).href; document.querySelector('#sharing-dialog').showModal(); }
+    const job = generation;
+    try { await members(); await publicSharing.open(); if (job !== generation) return; document.querySelector('#sharing-title').textContent = library.name; document.querySelector('#sharing-link').value = new URL(`/s/${library.share_id}`, location.origin).href; document.querySelector('#sharing-dialog').showModal(); }
     catch (error) { notify(error.message); }
   }
   async function folderSettings() {
