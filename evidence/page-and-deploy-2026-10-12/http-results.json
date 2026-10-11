@@ -1,0 +1,102 @@
+{
+  "observedAt": "2026-10-12T00:09:22.558556+09:00",
+  "deployedCommit": "14c3e73cb1bfe692705f16747f320f846ebc420a",
+  "checks": [
+    {
+      "path": "/healthz",
+      "status": 200,
+      "elapsedMs": 612,
+      "cacheControl": "no-store",
+      "body": {
+        "status": "ready"
+      }
+    },
+    {
+      "path": "/api/libraries",
+      "status": 401,
+      "elapsedMs": 621,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/",
+      "status": 200,
+      "elapsedMs": 400,
+      "cacheControl": "no-store",
+      "sha256": "781bf18ed90f1ef9d287270e324cd967310580758c9b703c405cd6f8147b66d3",
+      "matchesSource": true,
+      "transform": "shared server inserts <base href=\"/\" />"
+    },
+    {
+      "path": "/js/app.js",
+      "status": 200,
+      "elapsedMs": 1387,
+      "cacheControl": "no-store",
+      "sha256": "9558196583c42642d1732adb282099fc64ecbd54d48ea286543e7b556ecd9c9f",
+      "matchesSource": true
+    },
+    {
+      "path": "/js/local-index.js",
+      "status": 200,
+      "elapsedMs": 412,
+      "cacheControl": "no-store",
+      "sha256": "b718eaa6239af6091e1f59a927a8cd7c53b2f513f2eb0c3405359df32a8d881c",
+      "matchesSource": true
+    },
+    {
+      "path": "/js/preview-page-filter.js",
+      "status": 200,
+      "elapsedMs": 1572,
+      "cacheControl": "no-store",
+      "sha256": "dde8f02de9b1a12da9fc6ce2fe31fa20fccfac0ac5f783feb0a4321130c3b232",
+      "matchesSource": true
+    },
+    {
+      "path": "/js/pdf-preview.js",
+      "status": 200,
+      "elapsedMs": 595,
+      "cacheControl": "no-store",
+      "sha256": "7ab5aa700a952b0581b7874d7d73a9c4b12eb5135b163a4c60092072cc8a9140",
+      "matchesSource": true
+    },
+    {
+      "path": "/js/hwp-preview.js",
+      "status": 200,
+      "elapsedMs": 438,
+      "cacheControl": "no-store",
+      "sha256": "f7e0e6efe6ffbf5e12ac5526f6249291dd99ff8508625f4d7eb58af4b77951da",
+      "matchesSource": true
+    },
+    {
+      "path": "/js/preview-viewport.js",
+      "status": 200,
+      "elapsedMs": 519,
+      "cacheControl": "no-store",
+      "sha256": "66e807de44e3ff0ed59ec2d96f01197fa1d17dab6e45570178bb1e2eac7a4112",
+      "matchesSource": true
+    },
+    {
+      "path": "/js/workspace-activity.js",
+      "status": 200,
+      "elapsedMs": 311,
+      "cacheControl": "no-store",
+      "sha256": "1118f3e4d8e99fc2958ce763a5b385a224af176bd0efaa414c6333ee66c369f7",
+      "matchesSource": true
+    },
+    {
+      "path": "/js/render.js",
+      "status": 200,
+      "elapsedMs": 423,
+      "cacheControl": "no-store",
+      "sha256": "6fd4fc2c177f7cb8c7a22842790693d22eaace8f035a1e07dd392dda5b421ffe",
+      "matchesSource": true
+    },
+    {
+      "path": "/styles/app.css",
+      "status": 200,
+      "elapsedMs": 287,
+      "cacheControl": "no-store",
+      "sha256": "d871528b6e0e351c9fa833720afa14604cf448f9f9173882da677176378af6ec",
+      "matchesSource": true
+    }
+  ]
+}

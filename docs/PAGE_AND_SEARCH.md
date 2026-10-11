@@ -27,4 +27,4 @@
 
 ## 배포
 
-코드와 로컬 검수만 수행했다. 운영 서버에 반영하지 않았으며 별도 배포 지시를 기다린다. DB migration, OAuth 권한, Drive 공유 설정, 요금제 변경은 필요하지 않다. 검수 결과는 `evidence/page-and-2026-10-11/RESULT.md`에 기록한다.
+사용자의 별도 배포 지시에 따라 2026-10-12 00:05 KST에 프로그램 커밋 `14c3e73`을 운영 서버에 배포했다. DB migration, OAuth 권한, Drive 공유 설정, 요금제는 변경하지 않았다. 로컬 검수는 `evidence/page-and-2026-10-11/RESULT.md`, 운영 실사용 결과와 남은 문제는 `evidence/page-and-deploy-2026-10-12/RESULT.md`에 기록한다.
