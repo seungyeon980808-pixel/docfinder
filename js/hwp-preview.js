@@ -1,3 +1,4 @@
+import { applyPreviewPageFilter } from "./preview-page-filter.js";
 import { initialPreviewPosition } from "./preview-position.js?v=navigation-focus-1";
 import { hwpPageHighlights } from "./hwp-highlights.js?v=phrase-map-2";
 import { decorateMatch } from "./search-matches.js?v=phrase-map-2";
@@ -30,6 +31,7 @@ export function updateHwpPreview(item, query) {
   session.item = item;
   session.restoreAnchor = position.anchor;
   session.query = query;
+  applyPreviewPageFilter(session);
   session.navigation = createPreviewNavigation(item, query);
   session.navigation.bind((page, index) => { session.restoreAnchor = null; session.goToPage(page, index); });
   for (const [node, record] of session.rendered) applyHighlights(session, node, record);
@@ -61,11 +63,12 @@ export async function renderHwpPreview(viewer, item, getBytes, query = "") {
     viewer.innerHTML = Array.from({ length: pageCount }, (_, index) =>
       `<div class="source-page" data-page-number="${index + 1}"><img alt="${index + 1}쪽 한글 원문" /></div>`).join("");
     session.pages = [...viewer.querySelectorAll(".source-page")];
+    applyPreviewPageFilter(session);
     status.hidden = false;
     trackPreviewViewport(session, pageCount);
     session.goToPage = (number, matchIndex = 0) => {
       const node = session.pages[number - 1];
-      if (!node || activeSession !== session) return;
+      if (!node || node.hidden || activeSession !== session) return;
       session.pending = session.query ? { page: number, matchIndex } : null;
       node.scrollIntoView({ block: "start" });
       const record = session.rendered.get(node);
@@ -169,10 +172,10 @@ function queuePage(session, node, priority = 10) {
   const cached = session.rendered.get(node);
   if (cached) { touchPage(session, node, cached); return; }
   session.scheduler.schedule(node, async () => {
-    if (activeSession !== session || (priority && !session.visible.has(node))) return;
+    if (activeSession !== session || node.hidden || (priority && !session.visible.has(node))) return;
     try {
       const record = await session.renderer.page(Number(node.dataset.pageNumber));
-      if (activeSession !== session || (priority && !session.visible.has(node))) return;
+      if (activeSession !== session || node.hidden || (priority && !session.visible.has(node))) return;
       if (!record.svg.includes("<svg")) throw new Error("원문 페이지가 없습니다.");
       const viewBox = record.svg.match(/viewBox=["']\s*0\s+0\s+([\d.]+)\s+([\d.]+)["']/u);
       if (viewBox) node.style.aspectRatio = `${viewBox[1]}/${viewBox[2]}`;

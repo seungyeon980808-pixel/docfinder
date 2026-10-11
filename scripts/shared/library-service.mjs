@@ -177,11 +177,12 @@ export class LibraryService {
     });
     this.cache.delete(id);
   }
-  async search(user, id, query, mode) {
+  async search(user, id, query, mode, matchScope = "document") {
+    if (!["document", "page"].includes(matchScope)) deny(400, "검색 조건을 확인하세요.");
     if (query.length > 500) deny(400, '검색어는 500자 이내로 입력하세요.');
     if (mode === 'name') return filterDocuments((await this.metadata(user, id)).documents, { query, folder: '전체', mode });
     const corpus = await this.corpus(user, id);
-    return mode === 'name' ? filterDocuments(corpus.documents, { query, folder: '전체', mode }) : searchLocalIndex(corpus.documents, corpus.entries, query);
+    return mode === 'name' ? filterDocuments(corpus.documents, { query, folder: '전체', mode }) : searchLocalIndex(corpus.documents, corpus.entries, query, matchScope);
   }
   async document(user, id, documentId) {
     await this.permission(user, id);

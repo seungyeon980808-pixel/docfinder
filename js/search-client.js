@@ -41,12 +41,12 @@ export function createSearchClient() {
   };
   return {
     reset, prepare,
-    async search(documents, entries, query) {
-      if (typeof Worker === "undefined") return searchLocalIndex(documents, entries, query);
+    async search(documents, entries, query, matchScope = "document") {
+      if (typeof Worker === "undefined") return searchLocalIndex(documents, entries, query, matchScope);
       const ready = prepare(entries); const indexJob = generation; const searchJob = ++searchGeneration;
       await ready;
       if (indexJob !== generation || searchJob !== searchGeneration) throw new DOMException('지난 검색을 중단했습니다.', 'AbortError');
-      const result = await send({ type: 'search', documents, query });
+      const result = await send({ type: 'search', documents, query, matchScope });
       if (indexJob !== generation || searchJob !== searchGeneration) throw new DOMException('지난 검색을 중단했습니다.', 'AbortError');
       return result;
     }

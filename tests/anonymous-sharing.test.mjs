@@ -175,3 +175,23 @@ test('Active links remain manageable when more than 200 newer revoked links exis
   const response = await f.host.request(`${f.base}/public-links`);
   assert.equal(response.status, 200); assert.equal(response.data.links.length, 200); assert.equal(response.data.links[0].id, link.id); assert.equal(response.data.links[0].token, link.token);
 });
+
+
+test('Page-level AND applies to authenticated and scoped anonymous search without leaking private matches', async t => {
+  const f = await setup(t);
+  await f.seed('shared', ['alpha', 'alpha beta alpha', 'beta', 'alpha beta']);
+  await f.seed('split', ['alpha', 'beta']); await f.seed('private', ['alpha beta secret']);
+  const link = await f.create({ documentIds: ['shared', 'split'] }); await f.open(link);
+  const query = 'q=alpha%2Cbeta&matchScope=page';
+  const guest = await f.guest.request(`/api/public-links/${link.id}/search?${query}`);
+  assert.equal(guest.status, 200); assert.deepEqual(guest.data.documents.map(d => d.id), ['shared']);
+  assert.deepEqual(guest.data.documents[0].matchedPages.map(p => p.page), [2, 4]);
+  assert.equal(guest.data.documents[0].matchScope, 'page');
+  const owner = await f.host.request(`${f.base}/search?${query}`);
+  assert.equal(owner.status, 200); assert.deepEqual(new Set(owner.data.documents.map(d => d.id)), new Set(['shared', 'private']));
+  assert.deepEqual((await f.guest.request(`/api/public-links/${link.id}/search?q=alpha%2Cbeta&matchScope=document`)).data.documents.map(d => d.id), ['shared', 'split']);
+  assert.equal((await f.guest.request(`/api/public-links/${link.id}/search?matchScope=invalid`)).status, 400);
+  assert.equal((await f.host.request(`${f.base}/search?matchScope=invalid`)).status, 400);
+  await f.host.request(`${f.base}/public-links/${link.id}`, { method: 'DELETE' });
+  assert.equal((await f.guest.request(`/api/public-links/${link.id}/search?${query}`)).status, 410);
+});

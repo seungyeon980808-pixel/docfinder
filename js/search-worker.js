@@ -8,7 +8,7 @@ self.onmessage = ({ data }) => {
       self.postMessage({ id: data.id, result: true });
     } else if (data.type === "search") {
       if (!index) throw new Error("검색 색인이 준비되지 않았습니다.");
-      self.postMessage({ id: data.id, result: searchPageIndex(data.documents, index, data.query) });
+      self.postMessage({ id: data.id, result: searchPageIndex(data.documents, index, data.query, data.matchScope) });
     }
   } catch (error) { self.postMessage({ id: data.id, error: error.message }); }
 };

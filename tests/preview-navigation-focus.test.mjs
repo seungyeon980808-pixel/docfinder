@@ -89,3 +89,16 @@ test("working in the original changes active pane while document identity stays 
   setWorkspaceDocument(null);
   assert.equal(header.hidden, true);
 });
+
+
+test("same-page filtering does not restore a hidden page from a wider search", () => {
+  clearPreviewPositions();
+  initialPreviewPosition(item, "alpha, beta");
+  rememberPreviewPosition(item, "alpha, beta", { page: 8, anchor: { page: 9, fraction: .3 } });
+  const filtered = { ...item, matchScope: 'page', termCount: 2, matchedPages: [item.matchedPages[1]] };
+  assert.equal(initialPreviewPosition(filtered, "alpha, beta").page, 2);
+  rememberPreviewPosition(filtered, "alpha, beta", { page: 2, anchor: { page: 9, fraction: .3 } });
+  assert.equal(initialPreviewPosition(filtered, "alpha, beta").anchor, null);
+  assert.equal(initialPreviewPosition(item, "alpha, beta").page, 8);
+  clearPreviewPositions();
+});

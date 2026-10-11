@@ -107,7 +107,7 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
         if (request.method !== 'GET' && !(request.method === 'HEAD' && /^documents\/[a-zA-Z0-9_-]{1,128}\/original$/u.test(action))) deny(405, '공유 링크는 열람만 가능합니다.');
         if (!action) return write(response, 200, await publicLinks.catalog(id, token));
         if (action === 'prepare') { const corpus = await publicLinks.corpus(id, token); return write(response, 200, { ready: true, revision: corpus.revision }); }
-        if (action === 'search') return write(response, 200, { documents: await publicLinks.search(id, token, url.searchParams.get('q') || '', url.searchParams.get('mode') || 'content') });
+        if (action === 'search') return write(response, 200, { documents: await publicLinks.search(id, token, url.searchParams.get('q') || '', url.searchParams.get('mode') || 'content', url.searchParams.get('matchScope') || 'document') });
         const original = /^documents\/([a-zA-Z0-9_-]{1,128})\/original$/u.exec(action);
         if (original) {
           const active = guestDownloads.get(ip) || 0;
@@ -183,7 +183,7 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
       if (request.method === 'POST' && action === 'accept') { await service.accept(user, id); return write(response, 200, { accepted: true }); }
       if (request.method === 'GET' && !action) return write(response, 200, await service.catalog(user, id));
       if (request.method === 'GET' && action === 'prepare') { const corpus = await service.corpus(user, id); return write(response, 200, { ready: true, revision: corpus.signature }); }
-      if (request.method === 'GET' && action === 'search') return write(response, 200, { documents: await service.search(user, id, url.searchParams.get('q') || '', url.searchParams.get('mode') || 'content') });
+      if (request.method === 'GET' && action === 'search') return write(response, 200, { documents: await service.search(user, id, url.searchParams.get('q') || '', url.searchParams.get('mode') || 'content', url.searchParams.get('matchScope') || 'document') });
       if (request.method === 'GET' && action === 'invitations') return write(response, 200, { invitations: await service.invitations(user, id) });
       if (request.method === 'POST' && action === 'invitations') { const { email } = await jsonBody(request); await service.invite(user, id, email); return write(response, 201, { invited: true }); }
       if (request.method === 'DELETE' && action.startsWith('invitations/')) { await service.revoke(user, id, action.slice('invitations/'.length)); return write(response, 200, { revoked: true }); }

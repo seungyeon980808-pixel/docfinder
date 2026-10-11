@@ -4,7 +4,7 @@ const positions = new Map();
 const limit = 50;
 let activeQuery;
 const normalizeQuery = (query) => String(query || "").normalize("NFC").trim();
-const keyFor = (item) => JSON.stringify([item.libraryId || "", previewSourceKey(item)]);
+const keyFor = (item) => JSON.stringify([item.libraryId || "", previewSourceKey(item), item.matchScope || "document"]);
 
 export function clearPreviewPositions() { positions.clear(); activeQuery = undefined; }
 
@@ -22,9 +22,13 @@ export function initialPreviewPosition(item, query) {
   if (activeQuery !== normalized) { positions.clear(); activeQuery = normalized; }
   const key = keyFor(item);
   const saved = positions.get(key);
-  if (saved) {
+  const pageFilter = item.matchScope === 'page' && item.termCount > 1 && normalized;
+  const allowed = new Set((item.matchedPages || []).map(entry => entry.page));
+  if (saved && (!pageFilter || allowed.has(saved.page))) {
     positions.delete(key); positions.set(key, saved);
-    return structuredClone(saved);
+    const restored = structuredClone(saved);
+    if (pageFilter && restored.anchor && !allowed.has(restored.anchor.page)) restored.anchor = null;
+    return restored;
   }
   const first = normalized ? [...(item.matchedPages || [])].filter((entry) => entry.page > 0)
     .sort((a, b) => a.page - b.page)[0] : null;

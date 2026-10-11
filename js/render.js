@@ -1,6 +1,7 @@
 import { clearPdfPreview, localPdfMarkup, renderLocalPdf, updatePdfPreview } from "./pdf-preview.js?v=navigation-focus-1";
 import { clearHwpPreview, renderHwpPreview, updateHwpPreview } from "./hwp-preview.js?v=navigation-focus-1";
 
+import { parseSearchTerms } from "./search.js?v=phrase-map-2";
 import { escapeHtml, highlightMarkup as highlight } from "./search-matches.js?v=phrase-map-2";
 import { clearPreviewNavigation } from "./preview-navigation.js?v=navigation-focus-1";
 import { previewSourceKey } from "./preview-cache.js?v=responsiveness-1";
@@ -106,7 +107,7 @@ function writeDocuments(state) {
     const pending = state.mode === "content" && state.query.trim() && !state.contentMatches;
     list.innerHTML = pending
       ? `<div class="empty-state"><strong>${state.searching ? "본문을 검색하는 중입니다" : "본문 검색을 실행하세요"}</strong><span>${state.searching ? "색인에서 일치하는 문서를 찾고 있습니다." : "검색 버튼을 누르면 원문 내용과 일치하는 문서만 표시합니다."}</span></div>`
-      : '<div class="empty-state"><strong>일치하는 문서가 없습니다</strong><span>검색 범위나 단어를 바꿔 보세요.</span></div>';
+      : `<div class="empty-state"><strong>일치하는 문서가 없습니다</strong><span>${state.mode === "content" && state.matchScope === "page" && parseSearchTerms(state.query).length > 1 ? "같은 쪽에 모든 검색어가 없습니다. ‘같은 쪽에 모두 포함’을 끄면 다른 쪽도 함께 검색합니다." : "검색 범위나 단어를 바꿔 보세요."}</span></div>`;
     return;
   }
   const showFolder = new Set(state.documents.map((item) => item.folder)).size > 1;
@@ -150,7 +151,7 @@ export function retryDocumentPreview() {
 }
 
 function renderDetail(state, getBytes) {
-  const documentItem = state.results.find((candidate) => candidate.id === state.selectedId)
+  let documentItem = state.results.find((candidate) => candidate.id === state.selectedId)
     || state.documents.find((candidate) => candidate.id === state.selectedId);
   const detail = document.querySelector("#document-detail");
   setWorkspaceDocument(documentItem);
@@ -174,8 +175,14 @@ function renderDetail(state, getBytes) {
   const retainedQuery = state.mode === 'content' && previous?.query === state.query && previous.item.id === documentItem.id
     && (previous.item.libraryId || '') === (documentItem.libraryId || '') ? state.query : '';
   const evidenceQuery = state.contentMatches || (state.settings.demoMode && state.mode === "content") ? state.query : retainedQuery;
+  // A new original may arrive before its new index. Keep the last confirmed
+  // page filter and reading state until replacement search evidence is ready.
+  if (!state.contentMatches && retainedQuery && previous.item.matchScope === state.matchScope) {
+    const { matchedPages, matchScope, termCount, matchedTermCount, samePage, page, excerpt, heading } = previous.item;
+    documentItem = { ...documentItem, matchedPages, matchScope, termCount, matchedTermCount, samePage, page, excerpt, heading };
+  }
   previousPreview = { item: documentItem, query: evidenceQuery };
-  const detailKey = JSON.stringify([sourceKey, documentItem.id, documentItem.modifiedTime, documentItem.sourceUrl, documentItem.page, documentItem.excerpt, documentItem.matchedPages, documentItem.source, state.localMode, state.settings.demoMode, state.mode, evidenceQuery, state.settings.pdfEditorUrl]);
+  const detailKey = JSON.stringify([sourceKey, documentItem.id, documentItem.modifiedTime, documentItem.sourceUrl, documentItem.page, documentItem.excerpt, documentItem.matchedPages, documentItem.matchScope, documentItem.source, state.localMode, state.settings.demoMode, state.mode, evidenceQuery, state.settings.pdfEditorUrl]);
   if (detail.dataset.key === detailKey) return;
   detail.dataset.sourceKey = sourceKey;
   const isHwp = format === "hwp" || format === "hwpx";
@@ -259,6 +266,10 @@ export function renderApp(state, getBytes) {
   document.querySelector("#sync-button").textContent = state.publicMode ? "게시 목록 새로고침" : "목록 새로고침";
   document.querySelector("#last-sync").textContent = formatDateTime(state.lastSync);
   document.querySelector("#search-mode").value = state.mode;
+  const multipleTerms = state.mode === "content" && parseSearchTerms(state.query).length > 1;
+  document.querySelector("#multi-keyword-options").hidden = !multipleTerms;
+  document.querySelector("#same-page-only").checked = state.matchScope === "page";
+  document.querySelector("#page-filter-help").textContent = state.matchScope === "page" ? "일치한 쪽만 표시" : "문서 전체에서 AND 검색";
   const input = document.querySelector('#search-input');
   if (input.dataset.composing !== 'true' && input.value !== state.query) input.value = state.query;
   document.querySelector("#search-input").placeholder = state.mode === "content" ? "학교 폭력, 학생 자치 · 쉼표로 AND 검색" : "문서 이름 · 쉼표로 AND 검색";

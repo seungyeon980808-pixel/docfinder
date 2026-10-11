@@ -203,10 +203,10 @@ export function createSharedLibrary({ onChange, notify }) {
   }, async sync() { if (library?.role === 'owner') await request(`/api/libraries/${library.id}/sync`, { method: 'POST', body: {} }); await refresh(); },
   cancelSearch() { searchAbort?.abort(); },
   prepareSearch() { return preparation.prepare(catalog?.revision, false, true); },
-  async search(query, mode) {
+  async search(query, mode, matchScope = "document") {
     if (!library || pending) return [];
     searchAbort?.abort(); searchAbort = new AbortController();
-    return (await request(`/api/libraries/${library.id}/search?${new URLSearchParams({ q: query, mode })}`, { signal: AbortSignal.any([searchAbort.signal, abort.signal]) })).documents;
+    return (await request(`/api/libraries/${library.id}/search?${new URLSearchParams({ q: query, mode, matchScope })}`, { signal: AbortSignal.any([searchAbort.signal, abort.signal]) })).documents;
   },
   getBytes: originalBytes,
   async retry(item) { await request(`/api/libraries/${library.id}/documents/${item.id}/retry`, { method: 'POST', body: {} }); await refresh(); },

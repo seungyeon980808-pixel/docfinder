@@ -73,7 +73,7 @@ export function createPreviewNavigation(documentItem, query) {
     <details class="preview-match-list"><summary>검색된 쪽 ${matches.length}</summary><div class="preview-match-options">
       ${matches.map((entry) => `<button type="button" data-match-page="${entry.page}"><strong>${entry.page}쪽</strong><span>${highlightMarkup(entry.excerpt || "", query)}</span></button>`).join("")}
     </div></details></div><div class="preview-term-legend" role="group" aria-label="이 문서에서 이동할 검색어">${terms.length > 1 ? '<span class="preview-filter-label">이동 대상</span><button type="button" data-match-term="-1">전체 검색어</button>' : ''}${terms.map((term, index) =>
-      terms.length > 1 ? `<button type="button" data-match-term="${index}" style="${termStyle(index)}"><i>${index + 1}</i>${escapeHtml(term)}</button>` : `<span style="${termStyle(index)}"><i>${index + 1}</i>${escapeHtml(term)}</span>`).join("")}</div><p class="preview-match-note" hidden></p>`;
+      terms.length > 1 ? `<button type="button" data-match-term="${index}" style="${termStyle(index)}"><i>${index + 1}</i>${escapeHtml(term)}</button>` : `<span style="${termStyle(index)}"><i>${index + 1}</i>${escapeHtml(term)}</span>`).join("")}<span class="preview-keyboard-help">↑↓ 검색 위치 · ← 문서 목록</span></div><p class="preview-match-note" hidden></p>`;
   const current = host.querySelector(".preview-current-page");
   const counter = host.querySelector(".preview-match-count");
   const list = host.querySelector("details");

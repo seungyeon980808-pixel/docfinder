@@ -12,6 +12,7 @@ export function pageAtPosition(pages, top) {
 }
 
 export function capturePageAnchor(scrollRoot, pages) {
+  pages = pages.filter(page => !page.hidden);
   const top = scrollRoot.getBoundingClientRect().top;
   const page = pageAtPosition(pages, top);
   if (!page) return null;
@@ -26,7 +27,7 @@ export function trackPreviewViewport(session, total) {
   session.updateViewport = () => {
     if (scrollRoot.clientWidth === session.viewportWidth) session.anchor = capturePageAnchor(scrollRoot, pages);
     const threshold = scrollRoot.getBoundingClientRect().top + scrollRoot.clientHeight * .35;
-    const page = Number(pageAtPosition(pages, threshold)?.dataset.pageNumber || total);
+    const page = Number(pageAtPosition(pages.filter(page => !page.hidden), threshold)?.dataset.pageNumber || total);
     session.status.textContent = `${page} / ${total}쪽`;
     session.navigation.setPage(page, total);
     rememberPreviewPosition(session.item, session.query, {
@@ -48,7 +49,7 @@ export function stopPreviewViewport(session) {
 
 export function restorePageAnchor(scrollRoot, pages, anchor) {
   const page = anchor && pages[Math.min(pages.length, Math.max(1, anchor.page)) - 1];
-  if (!page) return false;
+  if (!page || page.hidden) return false;
   const rectangle = page.getBoundingClientRect();
   const top = scrollRoot.scrollTop + rectangle.top - scrollRoot.getBoundingClientRect().top + rectangle.height * anchor.fraction;
   scrollRoot.scrollTo({ top: Math.max(0, top), behavior: "instant" });

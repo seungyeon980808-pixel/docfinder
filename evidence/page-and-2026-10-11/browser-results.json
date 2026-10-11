@@ -1,0 +1,35 @@
+{
+  "checks": [
+    {
+      "name": "chromium-desktop",
+      "passed": true,
+      "visibleOriginalPages": [
+        2,
+        4
+      ],
+      "preservedOriginalPageCount": 4,
+      "originalDownloadExact": true
+    },
+    {
+      "name": "webkit-desktop-guest",
+      "passed": true,
+      "visibleOriginalPages": [
+        2,
+        4
+      ],
+      "preservedOriginalPageCount": 4,
+      "originalDownloadExact": true
+    },
+    {
+      "name": "webkit-mobile-guest",
+      "passed": true,
+      "visibleOriginalPages": [
+        2,
+        4
+      ],
+      "preservedOriginalPageCount": 4,
+      "originalDownloadExact": true
+    }
+  ],
+  "errors": []
+}

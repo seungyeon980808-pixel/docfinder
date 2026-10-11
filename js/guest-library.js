@@ -60,10 +60,10 @@ export function createGuestLibrary({ id, onChange }) {
     }, refresh, sync: refresh,
     cancelSearch() { searchAbort?.abort(); },
     prepareSearch() { return preparation.prepare(catalog?.revision, false, true); },
-    async search(query, mode) {
+    async search(query, mode, matchScope = "document") {
       if (!catalog) return [];
       searchAbort?.abort(); searchAbort = new AbortController();
-      return (await request(`/search?${new URLSearchParams({ q: query, mode })}`, { signal: searchAbort.signal })).documents;
+      return (await request(`/search?${new URLSearchParams({ q: query, mode, matchScope })}`, { signal: searchAbort.signal })).documents;
     },
     getBytes: originalBytes
   };

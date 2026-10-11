@@ -1,3 +1,4 @@
+import { applyPreviewPageFilter } from "./preview-page-filter.js";
 import { initialPreviewPosition } from "./preview-position.js?v=navigation-focus-1";
 import { findSearchMatches, highlightSegments, decorateMatch, joinTextRuns, rangesInSegments } from "./search-matches.js?v=phrase-map-2";
 import { clearPreviewNavigation, createPreviewNavigation, focusPageMatch } from "./preview-navigation.js?v=navigation-focus-1";
@@ -48,6 +49,7 @@ export function updatePdfPreview(item, query) {
   session.item = item;
   session.restoreAnchor = position.anchor;
   session.query = query;
+  applyPreviewPageFilter(session);
   session.navigation = createPreviewNavigation(item, query);
   session.navigation.bind((page, index) => { session.restoreAnchor = null; session.goToPage(page, index); });
   for (const page of session.rendered.keys()) {
@@ -90,11 +92,12 @@ export async function renderLocalPdf(viewer, documentItem, getBytes, query = "")
     viewer.innerHTML = Array.from({ length: pdf.numPages }, (_, index) =>
       `<div class="source-page" data-page-number="${index + 1}" style="aspect-ratio:${firstViewport.width}/${firstViewport.height}"><canvas role="img" aria-label="PDF 원문 ${index + 1}쪽"></canvas></div>`).join("");
     session.pages = [...viewer.querySelectorAll(".source-page")];
+    applyPreviewPageFilter(session);
     status.hidden = false;
     trackPreviewViewport(session, pdf.numPages);
     session.goToPage = (number, matchIndex = 0) => {
       const node = session.pages[number - 1];
-      if (!node || activeSession !== session) return;
+      if (!node || node.hidden || activeSession !== session) return;
       session.pending = session.query ? { page: number, matchIndex } : null;
       node.scrollIntoView({ block: "start" });
       queuePage(session, node, 0);
@@ -193,7 +196,7 @@ function queuePage(session, node, priority = 10) {
 }
 
 async function renderPage(session, pageNode, priority = 10) {
-  if (activeSession !== session || pageNode.dataset.rendering === "true") return;
+  if (activeSession !== session || pageNode.hidden || pageNode.dataset.rendering === "true") return;
   const width = pageNode.clientWidth;
   if (!width || (priority && !session.visible.has(pageNode))) return;
   if (pageNode.dataset.renderedWidth === String(width)) {

@@ -131,11 +131,12 @@ export class PublicLinks {
     return { library: { id, name: link.name, role: 'guest' }, documents, revision, stats: cached.stats, indexReady: this.cache.get(id)?.revision === revision,
       publicLink: { scope: link.scope, includeNew: link.include_new, expiresAt: link.expires_at } };
   }
-  async search(id, token, query, mode) {
+  async search(id, token, query, mode, matchScope = "document") {
+    if (!["document", "page"].includes(matchScope)) deny(400, "검색 조건을 확인하세요.");
     if (query.length > 500) deny(400, '검색어는 500자 이내로 입력하세요.');
     if (mode === 'name') return filterDocuments((await this.catalog(id, token)).documents, { query, folder: '전체', mode });
     const corpus = await this.corpus(id, token);
-    const result = mode === 'name' ? filterDocuments(corpus.documents, { query, folder: '전체', mode }) : searchLocalIndex(corpus.documents, corpus.entries, query);
+    const result = mode === 'name' ? filterDocuments(corpus.documents, { query, folder: '전체', mode }) : searchLocalIndex(corpus.documents, corpus.entries, query, matchScope);
     await this.permission(id, token); return result;
   }
   async document(id, token, documentId) {

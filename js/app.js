@@ -39,6 +39,7 @@ const store = createStore({
   folder: "전체",
   query: "",
   mode: "name",
+  matchScope: "page",
   selectedId: initialSelectedId,
   accessToken: "",
   connection: publicMode ? "connecting" : settings.demoMode ? "demo" : "idle",
@@ -272,11 +273,11 @@ async function runSearch() {
   clearTimeout(searchTimer);
   const request = ++searchSequence;
   const state = store.get();
-  const isCurrent = () => request === searchSequence && store.get().query === state.query && store.get().mode === state.mode;
+  const isCurrent = () => request === searchSequence && store.get().query === state.query && store.get().mode === state.mode && store.get().matchScope === state.matchScope;
   if (state.sharedMode && state.mode === 'content') {
     if (!state.query.trim()) { updateView({ contentMatches: null }); return; }
     updateView({ searching: true, searchProgress: "검색 중" });
-    try { const matches = await sharedController.search(state.query, state.mode); if (isCurrent()) updateView({ contentMatches: matches, searching: false, searchProgress: "" }); }
+    try { const matches = await sharedController.search(state.query, state.mode, state.matchScope); if (isCurrent()) updateView({ contentMatches: matches, searching: false, searchProgress: "" }); }
     catch (error) { if (isCurrent()) { updateView({ searching: false, contentMatches: [], searchProgress: "" }); showToast(error.message); await sharedController.refresh(); } }
     return;
   }
@@ -295,7 +296,7 @@ async function runSearch() {
       if (!isCurrent()) return;
       if (index.version !== 1 || !Array.isArray(index.entries)) throw new Error("로컬 색인 형식이 올바르지 않습니다.");
       const documents = state.publicMode ? store.get().documents : state.documents;
-      const matches = await searchClient.search(documents, index.entries, state.query);
+      const matches = await searchClient.search(documents, index.entries, state.query, state.matchScope);
       if (isCurrent()) updateView({ contentMatches: matches, searching: false, searchProgress: "", indexStats: summarizeIndex(documents, index.entries) });
     } catch {
       if (!isCurrent()) return;
@@ -401,6 +402,9 @@ document.addEventListener("click", async (event) => {
   if (row) {
     updateView({ selectedId: row.dataset.documentId });
     detailPanel.open(row.dataset.documentId);
+    if (!window.matchMedia('(max-width: 959px)').matches) {
+      document.querySelector(`[data-document-id="${CSS.escape(row.dataset.documentId)}"]`)?.focus({ preventScroll: true });
+    }
   }
   if (rowAction) {
     const documentId = rowAction.closest("[data-result-id]")?.dataset.resultId;
@@ -485,6 +489,7 @@ document.querySelector("#search-input").addEventListener("compositionend", (even
 document.querySelector("#search-input").addEventListener("input", (event) => {
   if (!composingQuery && !event.isComposing) queueSearch({ query: event.target.value });
 });
+document.querySelector("#same-page-only").addEventListener("change", (event) => { queueSearch({ matchScope: event.target.checked ? "page" : "document" }); });
 document.querySelector("#search-mode").addEventListener("change", (event) => { queueSearch({ mode: event.target.value }); });
 document.querySelector("#local-hwp-input").addEventListener("change", async (event) => {
   const file = event.target.files?.[0];

@@ -108,3 +108,38 @@ test("띄어쓰기 있는 구절과 붙은 한글은 같고 떨어진 단어는 
   assert.deepEqual(new Set(searchLocalIndex(documents, entries, "학생 자치").map((item) => item.id)), new Set(["a", "b"]));
   assert.equal(searchLocalIndex(documents, entries, "학생, 자치").length, 3);
 });
+
+
+test("쪽 AND는 모든 검색어가 포함된 쪽만 남기고 분산된 문서는 제외한다", () => {
+  const documents = [{ id: "same" }, { id: "split" }, { id: "missing" }];
+  const entries = [{ id: "same", page: 1, text: "학교 폭력" },
+    { id: "same", page: 4, text: "학교 폭력 학생 자치 학교 폭력" },
+    { id: "same", page: 8, text: "학생 자치와 학교 폭력" },
+    { id: "split", page: 1, text: "학교 폭력" }, { id: "split", page: 9, text: "학생 자치" },
+    { id: "missing", page: 2, text: "학교 폭력" }];
+  const [result] = searchLocalIndex(documents, entries, "학교 폭력, 학생 자치", "page");
+  assert.equal(result.id, "same"); assert.equal(result.matchScope, "page");
+  assert.deepEqual(result.matchedPages.map(p => p.page), [4, 8]);
+  assert.equal(result.matchedPages[0].ranges.length, 3);
+  assert.deepEqual(result.matchedPages[0].termIndices, [0, 1]);
+  assert.equal(searchLocalIndex(documents, entries, "학교 폭력, 학생 자치", "page").length, 1);
+  assert.equal(searchLocalIndex(documents, entries, "학교 폭력, 학생 자치", "document").length, 2);
+});
+
+test("쪽 AND는 세 검색어·중복·한 글자·띄어쓰기 있는 구절을 처리한다", () => {
+  const docs = [{ id: "a" }];
+  const entries = [{ id: "a", page: 1, text: "학교 폭력 학생자치" },
+    { id: "a", page: 2, text: "학교\n폭력 학생 자치 회장" }];
+  const [result] = searchLocalIndex(docs, entries, "학교폭력, 학생 자치, 회, 회", "page");
+  assert.equal(result.termCount, 3); assert.deepEqual(result.matchedPages.map(p => p.page), [2]);
+  assert.equal(searchLocalIndex(docs, entries, "학교 폭력 학생 자치", "page")[0].termCount, 1, "spaces keep a single Korean phrase");
+  assert.equal(searchLocalIndex(docs, entries, "학생자치, 학생 자치", "page")[0].matchedPages.length, 2);
+  assert.deepEqual(searchLocalIndex(docs, entries, "", "page"), docs);
+});
+
+test("쪽 정보 없는 추출 본문은 복수 검색어의 같은 쪽 증거가 아니다", () => {
+  const docs = [{ id: "legacy" }], entries = [{ id: "legacy", page: null, text: "alpha beta" }];
+  assert.equal(searchLocalIndex(docs, entries, "alpha, beta", "page").length, 0);
+  assert.equal(searchLocalIndex(docs, entries, "alpha, beta", "document").length, 1);
+  assert.equal(searchLocalIndex(docs, entries, "alpha", "page").length, 1);
+});
