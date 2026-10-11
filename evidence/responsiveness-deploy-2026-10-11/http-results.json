@@ -1,0 +1,69 @@
+{
+  "checkedAt": "2026-10-11T10:43:18.134Z",
+  "rows": [
+    {
+      "path": "/api/libraries",
+      "status": 401,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/healthz",
+      "status": 200,
+      "cacheControl": "no-store",
+      "healthy": true
+    },
+    {
+      "path": "/api/libraries/qa-no-access/prepare",
+      "status": 401,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/js/background-index.js",
+      "status": 200,
+      "cacheControl": "no-store",
+      "matchesCommit": true,
+      "sha256": "6db227fc7accefdc047ba70c3062997d106313c2ac6e9fc4693b7138fc840c46"
+    },
+    {
+      "path": "/js/shared-library.js",
+      "status": 200,
+      "cacheControl": "no-store",
+      "matchesCommit": true,
+      "sha256": "3462b0edf8abc9f2b8a594f755a0ef062dd36f1a93882105338a3f19852b9e8d"
+    },
+    {
+      "path": "/js/app.js",
+      "status": 200,
+      "cacheControl": "no-store",
+      "matchesCommit": true,
+      "sha256": "292bda1e049a52f1f2202dbf3f2d7d94546b22652df0ad869150d200266b6a69"
+    },
+    {
+      "path": "/js/pdf-preview.js",
+      "status": 200,
+      "cacheControl": "no-store",
+      "matchesCommit": true,
+      "sha256": "9a4e78c386035ecaf9ffbe1b8c33a7f6870c9ea3d040dac1725bff2c380878bd"
+    },
+    {
+      "path": "/js/preview-cache.js",
+      "status": 200,
+      "cacheControl": "no-store",
+      "matchesCommit": true,
+      "sha256": "30229d15d01b3cd824913b2bf9d931c22d827b0c60fcaf974eddda997084a560"
+    },
+    {
+      "path": "/styles/app.css",
+      "status": 200,
+      "cacheControl": "no-store",
+      "matchesCommit": true,
+      "sha256": "933906be15a767a6a46887b42324fe2e1cff6e9fc4e75ccd04843500e383dc66"
+    },
+    {
+      "path": "/config.js",
+      "status": 200,
+      "cacheControl": "no-store",
+      "sharedMode": true
+    }
+  ]
+}
