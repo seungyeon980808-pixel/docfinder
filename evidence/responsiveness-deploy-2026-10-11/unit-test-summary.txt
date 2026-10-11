@@ -1,0 +1,9 @@
+✔ Graceful shutdown waits for the active indexing job despite later timer ticks (711.281875ms)
+ℹ tests 197
+ℹ suites 0
+ℹ pass 197
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13436.684917

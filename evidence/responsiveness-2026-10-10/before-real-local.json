@@ -1,0 +1,103 @@
+{
+  "browser": "chromium",
+  "url": "http://localhost:4181",
+  "repetitions": 5,
+  "viewport": "1280x800",
+  "deviceScaleFactor": 2,
+  "methodology": "Real local library, no injected delay; first list paint and trusted click reflected by selection, each followed by two animation frames; fresh context then reload",
+  "samples": [
+    {
+      "repetition": 1,
+      "visit": "cold",
+      "firstDisplayMs": 85.60000000149012,
+      "interactiveMs": 161.39999999850988,
+      "documents": 15
+    },
+    {
+      "repetition": 1,
+      "visit": "repeat",
+      "firstDisplayMs": 44.69999999552965,
+      "interactiveMs": 78.09999999403954,
+      "documents": 15
+    },
+    {
+      "repetition": 2,
+      "visit": "cold",
+      "firstDisplayMs": 41.70000000298023,
+      "interactiveMs": 85.10000000149012,
+      "documents": 15
+    },
+    {
+      "repetition": 2,
+      "visit": "repeat",
+      "firstDisplayMs": 40.100000001490116,
+      "interactiveMs": 74.10000000149012,
+      "documents": 15
+    },
+    {
+      "repetition": 3,
+      "visit": "cold",
+      "firstDisplayMs": 40.600000001490116,
+      "interactiveMs": 103.10000000149012,
+      "documents": 15
+    },
+    {
+      "repetition": 3,
+      "visit": "repeat",
+      "firstDisplayMs": 37.600000001490116,
+      "interactiveMs": 70.89999999850988,
+      "documents": 15
+    },
+    {
+      "repetition": 4,
+      "visit": "cold",
+      "firstDisplayMs": 49.600000001490116,
+      "interactiveMs": 97.30000000447035,
+      "documents": 15
+    },
+    {
+      "repetition": 4,
+      "visit": "repeat",
+      "firstDisplayMs": 32.600000001490116,
+      "interactiveMs": 66,
+      "documents": 15
+    },
+    {
+      "repetition": 5,
+      "visit": "cold",
+      "firstDisplayMs": 44,
+      "interactiveMs": 91.5,
+      "documents": 15
+    },
+    {
+      "repetition": 5,
+      "visit": "repeat",
+      "firstDisplayMs": 40.79999999701977,
+      "interactiveMs": 74.19999999552965,
+      "documents": 15
+    }
+  ],
+  "summary": {
+    "cold": {
+      "firstDisplayMs": {
+        "median": 44,
+        "p95": 85.60000000149012
+      },
+      "interactiveMs": {
+        "median": 97.30000000447035,
+        "p95": 161.39999999850988
+      }
+    },
+    "repeat": {
+      "firstDisplayMs": {
+        "median": 40.100000001490116,
+        "p95": 44.69999999552965
+      },
+      "interactiveMs": {
+        "median": 74.10000000149012,
+        "p95": 78.09999999403954
+      }
+    }
+  },
+  "errors": []
+}

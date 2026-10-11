@@ -4,7 +4,7 @@ import { clearPreviewNavigation, createPreviewNavigation, focusPageMatch } from 
 import { readPdfTextContent } from "./pdf-text-content.js?v=phrase-map-2";
 import { restorePageAnchor, trackPreviewViewport, stopPreviewViewport } from "./preview-viewport.js?v=navigation-focus-1";
 
-import { previewSourceKey } from "./preview-cache.js?v=phrase-map-2";
+import { previewSourceKey } from "./preview-cache.js?v=responsiveness-1";
 import { createRenderScheduler } from "./preview-scheduler.js?v=phrase-map-2";
 
 const PDF_MODULE_URL = new URL("../vendor/pdfjs/pdf.mjs", import.meta.url).href;
@@ -28,6 +28,7 @@ export function localPdfMarkup() {
 
 export function clearPdfPreview() {
   if (!activeSession) return;
+  activeSession.abort.abort();
   activeSession.observer?.disconnect();
   activeSession.resizeObserver?.disconnect();
   stopPreviewViewport(activeSession);
@@ -53,7 +54,11 @@ export function updatePdfPreview(item, query) {
     if (session.contents.has(page)) applyHighlights(session, page);
     else if (session.visible.has(page)) queuePage(session, page, 0);
   }
-  session.goToPage(position.page, position.matchIndex);
+  session.goToPage(position.anchor?.page || position.page, position.matchIndex);
+  if (position.anchor) {
+    session.pending = null; session.restoreAnchor = null;
+    restorePageAnchor(session.scrollRoot, session.pages, position.anchor); session.updateViewport();
+  }
   return true;
 }
 
@@ -64,10 +69,10 @@ export async function renderLocalPdf(viewer, documentItem, getBytes, query = "")
   const navigation = createPreviewNavigation(documentItem, query);
   const position = initialPreviewPosition(documentItem, query);
   const session = { viewer, scrollRoot, status, navigation, query, item: documentItem, restoreAnchor: position.anchor, key: previewSourceKey(documentItem), startedAt: performance.now(),
-    scheduler: createRenderScheduler(2), contents: new Map(), rendered: new Map(), tasks: new Set(), visible: new Set(), layers: new Map(), textReaders: new Set() };
+    abort: new AbortController(), scheduler: createRenderScheduler(2), contents: new Map(), rendered: new Map(), tasks: new Set(), visible: new Set(), layers: new Map(), textReaders: new Set() };
   activeSession = session;
   try {
-    const [module, bytes] = await Promise.all([pdfjs(), getBytes(documentItem)]);
+    const [module, bytes] = await Promise.all([pdfjs(), getBytes(documentItem, { signal: session.abort.signal })]);
     if (activeSession !== session) return;
     session.loadingTask = module.getDocument({
       data: new Uint8Array(bytes), cMapUrl: `${PDF_ASSET_URL}cmaps/`, cMapPacked: true,
@@ -100,7 +105,11 @@ export async function renderLocalPdf(viewer, documentItem, getBytes, query = "")
       session.updateViewport();
     };
     navigation.bind((page, index) => { session.restoreAnchor = null; session.goToPage(page, index); });
-    session.goToPage(Math.max(1, Math.min(position.page, pdf.numPages)), position.matchIndex);
+    session.goToPage(Math.max(1, Math.min(position.anchor?.page || position.page, pdf.numPages)), position.matchIndex);
+    if (position.anchor) {
+      session.pending = null; session.restoreAnchor = null;
+      restorePageAnchor(scrollRoot, session.pages, position.anchor); session.updateViewport();
+    }
     session.observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) {
@@ -123,9 +132,10 @@ export async function renderLocalPdf(viewer, documentItem, getBytes, query = "")
       for (const page of session.visible) queuePage(session, page);
     });
     session.resizeObserver.observe(scrollRoot);
-  } catch {
+  } catch (error) {
     if (activeSession === session) {
-      viewer.innerHTML = '<p class="preview-error">PDF 원문을 표시하지 못했습니다. 파일 작업 메뉴에서 원문을 열어 확인하세요.</p>';
+      console.warn('DocFinder PDF preview failed', error);
+      viewer.innerHTML = '<p class="preview-error" role="status">PDF 원문을 표시하지 못했습니다. 연결을 확인한 뒤 <button type="button" class="secondary-button" data-preview-retry>원문 다시 시도</button></p>';
       status.hidden = true;
       clearPreviewNavigation();
     }
@@ -203,16 +213,34 @@ async function renderPage(session, pageNode, priority = 10) {
     if (activeSession !== session) return;
     const base = page.getViewport({ scale: 1 });
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const viewport = page.getViewport({ scale: (width / base.width) * ratio });
-    const canvas = pageNode.querySelector("canvas");
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
     pageNode.style.aspectRatio = `${base.width}/${base.height}`;
-    const task = page.render({ canvasContext: canvas.getContext("2d"), viewport });
-    session.tasks.add(task);
-    try { await task.promise; }
-    finally { session.tasks.delete(task); }
+    const paint = async (pixelWidth) => {
+      const viewport = page.getViewport({ scale: pixelWidth / base.width });
+      // Render away from the displayed canvas so upgrading never blanks the page.
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(viewport.width); canvas.height = Math.floor(viewport.height);
+      canvas.style.aspectRatio = `${base.width}/${base.height}`;
+      canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', `PDF 원문 ${pageNode.dataset.pageNumber}쪽`);
+      const task = page.render({ canvasContext: canvas.getContext('2d'), viewport });
+      session.tasks.add(task);
+      try { await task.promise; } finally { session.tasks.delete(task); }
+      if (activeSession !== session) return false;
+      pageNode.querySelector('canvas').replaceWith(canvas);
+      return true;
+    };
+    if (!pageNode.dataset.renderedWidth && width * ratio > 640) {
+      if (!await paint(Math.min(width, 640))) return;
+      pageNode.dataset.quality = 'preview';
+      const preparation = document.createElement('span'); preparation.className = 'page-preparation'; preparation.setAttribute('role', 'status');
+      preparation.textContent = '미리보기 · 원본 품질 준비 중'; pageNode.append(preparation);
+      session.viewer.dataset.firstPageMs ||= (performance.now() - session.startedAt).toFixed(1);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (activeSession !== session) return;
+    }
+    if (!await paint(width * ratio)) return;
     if (activeSession === session) {
+      pageNode.dataset.quality = 'original'; pageNode.querySelector('.page-preparation')?.remove();
+      session.viewer.dataset.originalQualityMs ||= (performance.now() - session.startedAt).toFixed(1);
       if (session.query) {
         try {
           await renderTextLayer(session, pageNode, page, page.getViewport({ scale: width / base.width }));
@@ -229,8 +257,15 @@ async function renderPage(session, pageNode, priority = 10) {
       trimPages(session);
     }
     page.cleanup();
-  } catch {
-    if (activeSession === session) { delete pageNode.dataset.renderedWidth; pageNode.textContent = `PDF ${pageNode.dataset.pageNumber}쪽을 렌더링하지 못했습니다.`; }
+  } catch (error) {
+    if (activeSession === session) {
+      console.warn('DocFinder PDF page failed', error);
+      delete pageNode.dataset.renderedWidth;
+      const retry = `<p class="page-preparation" role="status">${pageNode.dataset.pageNumber}쪽 원본 품질을 준비하지 못했습니다. <button type="button" data-preview-retry>다시 시도</button></p>`;
+      pageNode.querySelector('.page-preparation')?.remove();
+      if (pageNode.querySelector('canvas')?.width > 0) pageNode.insertAdjacentHTML('beforeend', retry);
+      else pageNode.innerHTML = retry;
+    }
   } finally {
     pageNode.dataset.rendering = "false";
   }

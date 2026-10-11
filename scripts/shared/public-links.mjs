@@ -1,14 +1,16 @@
 import { opaque, digest, equal, encrypt, decrypt, deny } from './security.mjs';
 import { filterDocuments } from '../../js/search.js';
-import { searchLocalIndex } from '../../js/local-index.js';
+import { searchLocalIndex, prepareLocalIndex } from '../../js/local-index.js';
 import { summarizeIndex } from '../../js/index-health.js';
+import { pageCountsSql, metadataStats } from './catalog-metadata.mjs';
+import { createRenderScheduler } from '../../js/preview-scheduler.js';
 
 const unavailable = () => deny(410, '공유 링크가 만료되었거나 해제되었습니다. 호스트에게 새 링크를 요청하세요.');
 const validSecret = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
 
 // Public readers never become library members. Every read stays within this grant.
 export class PublicLinks {
-  constructor({ db, service, key }) { this.db = db; this.service = service; this.key = key; this.cache = new Map(); }
+  constructor({ db, service, key }) { this.db = db; this.service = service; this.key = key; this.cache = new Map(); this.manifests = new Map(); this.preparation = createRenderScheduler(1); }
   async create(user, libraryId, body) {
     await this.service.permission(user, libraryId, true);
     const scope = body.scope || 'files'; const days = body.expiresInDays ?? 7;
@@ -82,35 +84,56 @@ export class PublicLinks {
     if (!validSecret(token) || !(await this.db.query('SELECT 1 FROM df_guest_sessions WHERE hash=$1 AND link_id=$2 AND expires_at>now()', [digest(token), id])).rows.length) deny(401, '공유 링크 전체를 다시 열어 주세요.');
     return link;
   }
-  async rows(link, withPages = false, documentId) {
-    return (await this.db.query(`SELECT d.id,d.metadata,d.version,d.status${withPages ? ',d.pages' : ''} FROM df_documents d WHERE d.library_id=$1 AND
+  async rows(link, withPages = false, documentId, counts = false) {
+    return (await this.db.query(`SELECT d.id,d.metadata,d.version,d.status${withPages ? ',d.pages' : ''}${counts ? ',' + pageCountsSql : ''} FROM df_documents d WHERE d.library_id=$1 AND
       ((EXISTS(SELECT 1 FROM df_public_link_documents s WHERE s.link_id=$2 AND s.library_id=d.library_id AND s.document_id=d.id AND s.source_folder_id=COALESCE(d.metadata->>'sourceFolderId',''))) OR ($3::boolean AND d.metadata->>'sourceFolderId'=$4))
       AND (NOT(d.metadata ? 'sourceFolderId') OR EXISTS(SELECT 1 FROM df_folder_sources f WHERE f.library_id=d.library_id AND f.folder_id=d.metadata->>'sourceFolderId'))
       ${documentId ? 'AND d.id=$5' : ''} ORDER BY d.id`, [link.library_id, link.id, link.include_new, link.folder_id, ...(documentId ? [documentId] : [])])).rows;
   }
+  documents(rows, id) {
+    return rows.map(row => ({ id: row.id, name: row.metadata.name, format: row.metadata.format, size: row.metadata.size, modifiedTime: row.metadata.modifiedTime,
+      libraryId: id, source: 'shared', folder: '공유 자료', path: row.metadata.name, readOnly: true, version: digest(row.version), sha256: digest(row.version), indexStatus: row.status, excerpt: '', heading: '원문',
+      sourceUrl: `/api/public-links/${id}/documents/${encodeURIComponent(row.id)}/original?version=${digest(row.version)}` }));
+  }
   async corpus(id, token) {
     const link = await this.permission(id, token);
-    let rows = await this.rows(link); let revision = digest(JSON.stringify(rows.map((row) => [row.id, row.version, row.status])));
+    const rows = await this.rows(link); const revision = digest(JSON.stringify(rows.map((row) => [row.id, row.version, row.status])));
     let cached = this.cache.get(id);
     if (cached?.revision !== revision) {
-      rows = await this.rows(link, true); revision = digest(JSON.stringify(rows.map((row) => [row.id, row.version, row.status])));
-      const documents = rows.map((row) => ({ id: row.id, name: row.metadata.name, format: row.metadata.format, size: row.metadata.size, modifiedTime: row.metadata.modifiedTime,
-        libraryId: id, source: 'shared', folder: '공유 자료', path: row.metadata.name, readOnly: true, version: digest(row.version), sha256: digest(row.version), indexStatus: row.status, excerpt: '', heading: '원문',
-        sourceUrl: `/api/public-links/${id}/documents/${encodeURIComponent(row.id)}/original?version=${digest(row.version)}` }));
-      const entries = rows.flatMap((row) => row.pages.map((page) => ({ ...page, id: row.id })));
-      cached = { revision, documents, entries, stats: summarizeIndex(documents, entries) }; this.cache.delete(id); this.cache.set(id, cached);
-      while (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value);
+      cached = await this.preparation.schedule(`${id}:${revision}`, async () => {
+        const rows = await this.rows(link, true);
+        if (digest(JSON.stringify(rows.map(row => [row.id, row.version, row.status]))) !== revision) deny(409, '공유 자료가 갱신되었습니다. 다시 검색하세요.');
+        const documents = this.documents(rows, id);
+        const entries = rows.flatMap(row => row.pages.map(page => ({ ...page, id: row.id })));
+        await prepareLocalIndex(entries, () => new Promise(resolve => setImmediate(resolve)));
+        const current = await this.rows(await this.permission(id, token));
+        if (digest(JSON.stringify(current.map(row => [row.id, row.version, row.status]))) !== revision) deny(409, '공유 자료가 갱신되었습니다. 다시 검색하세요.');
+        const value = { revision, documents, entries, stats: summarizeIndex(documents, entries) };
+        this.cache.delete(id); this.cache.set(id, value);
+        while (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value);
+        return value;
+      }, 0);
     }
     await this.permission(id, token); // Reads and searches can race with link revocation.
     return { ...cached, link };
   }
   async catalog(id, token) {
-    const corpus = await this.corpus(id, token);
-    return { library: { id, name: corpus.link.name, role: 'guest' }, documents: corpus.documents, revision: corpus.revision, stats: corpus.stats,
-      publicLink: { scope: corpus.link.scope, includeNew: corpus.link.include_new, expiresAt: corpus.link.expires_at } };
+    const link = await this.permission(id, token);
+    const rows = await this.rows(link); const documents = this.documents(rows, id);
+    const revision = digest(JSON.stringify(rows.map(row => [row.id, row.version, row.status])));
+    let cached = this.manifests.get(id);
+    if (cached?.revision !== revision) {
+      cached = { revision, stats: metadataStats(documents, await this.rows(link, false, undefined, true)) };
+      this.manifests.delete(id); this.manifests.set(id, cached);
+      while (this.manifests.size > 8) this.manifests.delete(this.manifests.keys().next().value);
+    }
+    await this.permission(id, token);
+    return { library: { id, name: link.name, role: 'guest' }, documents, revision, stats: cached.stats, indexReady: this.cache.get(id)?.revision === revision,
+      publicLink: { scope: link.scope, includeNew: link.include_new, expiresAt: link.expires_at } };
   }
   async search(id, token, query, mode) {
     if (query.length > 500) deny(400, '검색어는 500자 이내로 입력하세요.');
+    if (mode === 'name') return filterDocuments((await this.catalog(id, token)).documents, { query, folder: '전체', mode });
     const corpus = await this.corpus(id, token);
     const result = mode === 'name' ? filterDocuments(corpus.documents, { query, folder: '전체', mode }) : searchLocalIndex(corpus.documents, corpus.entries, query);
     await this.permission(id, token); return result;

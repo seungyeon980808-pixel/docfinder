@@ -1,0 +1,103 @@
+{
+  "browser": "chromium",
+  "url": "http://localhost:4173",
+  "repetitions": 5,
+  "viewport": "1280x800",
+  "deviceScaleFactor": 2,
+  "methodology": "Real local library, no injected delay; first list paint and trusted click reflected by selection, each followed by two animation frames; fresh context then reload",
+  "samples": [
+    {
+      "repetition": 1,
+      "visit": "cold",
+      "firstDisplayMs": 88.20000000298023,
+      "interactiveMs": 157.89999999850988,
+      "documents": 15
+    },
+    {
+      "repetition": 1,
+      "visit": "repeat",
+      "firstDisplayMs": 51.599999994039536,
+      "interactiveMs": 85.89999999850988,
+      "documents": 15
+    },
+    {
+      "repetition": 2,
+      "visit": "cold",
+      "firstDisplayMs": 55.399999998509884,
+      "interactiveMs": 117.59999999403954,
+      "documents": 15
+    },
+    {
+      "repetition": 2,
+      "visit": "repeat",
+      "firstDisplayMs": 42,
+      "interactiveMs": 73.39999999850988,
+      "documents": 15
+    },
+    {
+      "repetition": 3,
+      "visit": "cold",
+      "firstDisplayMs": 43.400000005960464,
+      "interactiveMs": 88.30000000447035,
+      "documents": 15
+    },
+    {
+      "repetition": 3,
+      "visit": "repeat",
+      "firstDisplayMs": 33.899999998509884,
+      "interactiveMs": 68.59999999403954,
+      "documents": 15
+    },
+    {
+      "repetition": 4,
+      "visit": "cold",
+      "firstDisplayMs": 45.899999998509884,
+      "interactiveMs": 90.10000000149012,
+      "documents": 15
+    },
+    {
+      "repetition": 4,
+      "visit": "repeat",
+      "firstDisplayMs": 34.600000001490116,
+      "interactiveMs": 67.89999999850988,
+      "documents": 15
+    },
+    {
+      "repetition": 5,
+      "visit": "cold",
+      "firstDisplayMs": 43.899999998509884,
+      "interactiveMs": 91.30000000447035,
+      "documents": 15
+    },
+    {
+      "repetition": 5,
+      "visit": "repeat",
+      "firstDisplayMs": 39.600000001490116,
+      "interactiveMs": 72.90000000596046,
+      "documents": 15
+    }
+  ],
+  "summary": {
+    "cold": {
+      "firstDisplayMs": {
+        "median": 45.899999998509884,
+        "p95": 88.20000000298023
+      },
+      "interactiveMs": {
+        "median": 91.30000000447035,
+        "p95": 157.89999999850988
+      }
+    },
+    "repeat": {
+      "firstDisplayMs": {
+        "median": 39.600000001490116,
+        "p95": 51.599999994039536
+      },
+      "interactiveMs": {
+        "median": 72.90000000596046,
+        "p95": 85.89999999850988
+      }
+    }
+  },
+  "errors": []
+}

@@ -209,7 +209,7 @@ function runDelayedPublicSearchHarness(race = false) {
       "./index-health.js?v=phrase-map-2": { summarizeIndex: () => ({}) },
       "./shared-library.js?v=sharing-1": { createSharedLibrary() { throw new Error('Public profile must not create a shared library session'); } },
       "./pdf-editor.js": { openPdfEditor() {} },
-      "./render.js?v=navigation-focus-1": { renderApp() {} },
+      "./render.js?v=responsiveness-1": { renderApp() {}, retryDocumentPreview() {} },
       "./workspace-activity.js?v=navigation-focus-1": { installWorkspaceActivity() {} },
       "./rhwp-editor.js": { destroyRhwpEditor() {}, initRhwpEditor() {}, openRhwpEditor: async () => {} },
       "./search.js?v=phrase-map-2": {
@@ -227,7 +227,7 @@ function runDelayedPublicSearchHarness(race = false) {
         saveSnapshot() {},
         selectSnapshotDocumentId: (documents) => documents[0]?.id || ""
       },
-      "./preview-cache.js?v=phrase-map-2": { createByteCache: (loader) => loader },
+      "./preview-cache.js?v=responsiveness-1": { createByteCache: (loader) => loader },
       "./toast.js": { createToast: () => () => {} }
     };
 

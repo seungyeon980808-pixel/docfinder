@@ -48,7 +48,7 @@ export function createJobs({ db, drive, service, extract = extractPages, pollMs 
         await tx.query(`UPDATE df_jobs SET status=$2,available_at=now()+interval '30 seconds',lease_until=NULL WHERE id=$1`, [job.id, job.attempts >= 3 ? 'failed' : 'pending']);
       });
     }
-    service.cache.delete(job.library_id); return true;
+    service.cache.delete(job.library_id); service.manifests?.delete(job.library_id); return true;
   }
   async function sync() {
     if (syncing) return; syncing = true;

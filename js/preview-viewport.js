@@ -47,7 +47,7 @@ export function stopPreviewViewport(session) {
 }
 
 export function restorePageAnchor(scrollRoot, pages, anchor) {
-  const page = anchor && pages[anchor.page - 1];
+  const page = anchor && pages[Math.min(pages.length, Math.max(1, anchor.page)) - 1];
   if (!page) return false;
   const rectangle = page.getBoundingClientRect();
   const top = scrollRoot.scrollTop + rectangle.top - scrollRoot.getBoundingClientRect().top + rectangle.height * anchor.fraction;

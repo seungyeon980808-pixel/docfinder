@@ -111,15 +111,13 @@ function normalizePublicDocument(documentItem, catalogUrl, appBaseUrl) {
   };
 }
 
-export async function loadPublicSnapshot(urls, appBaseUrl, fetcher = globalThis.fetch) {
-  const [catalogResponse, indexResponse] = await Promise.all([
-    fetcher(urls.catalog, { cache: "no-store" }),
-    fetcher(urls.searchIndex, { cache: "no-store" })
-  ]);
-  if (!catalogResponse.ok || !indexResponse.ok) throw new Error("Published document metadata could not be loaded.");
-  const [catalog, searchIndex] = await Promise.all([catalogResponse.json(), indexResponse.json()]);
+export async function loadPublicSnapshot(urls, appBaseUrl, fetcher = globalThis.fetch, onCatalog) {
+  const catalogRequest = fetcher(urls.catalog, { cache: 'no-store' });
+  const indexRequest = fetcher(urls.searchIndex, { cache: 'no-store' }).then(response => ({ response }), error => ({ error }));
+  const catalogResponse = await catalogRequest;
+  if (!catalogResponse.ok) throw new Error('Published document metadata could not be loaded.');
+  const catalog = await catalogResponse.json();
   if (catalog?.version !== 1 || !Array.isArray(catalog.documents)) throw new TypeError("Public catalog is invalid.");
-  if (searchIndex?.version !== 1 || !Array.isArray(searchIndex.entries)) throw new TypeError("Public search index is invalid.");
 
   const documentIds = new Set();
   const documents = catalog.documents.map((documentItem) => {
@@ -128,6 +126,13 @@ export async function loadPublicSnapshot(urls, appBaseUrl, fetcher = globalThis.
     documentIds.add(document.id);
     return document;
   });
+
+  await onCatalog?.({ documents, generatedAt: typeof catalog.generatedAt === 'string' ? catalog.generatedAt : '' });
+  const { response: indexResponse, error } = await indexRequest;
+  if (error) throw error;
+  if (!indexResponse.ok) throw new Error('Published search index could not be loaded.');
+  const searchIndex = await indexResponse.json();
+  if (searchIndex?.version !== 1 || !Array.isArray(searchIndex.entries)) throw new TypeError('Public search index is invalid.');
 
   const indexEntries = searchIndex.entries.map((entry) => {
     if (!entry

@@ -6,17 +6,17 @@ import { downloadDriveFile, DriveError } from "./drive-api.js";
 import { createSearchClient } from "./search-client.js?v=phrase-map-2";
 import { summarizeIndex } from "./index-health.js?v=phrase-map-2";
 import { openPdfEditor } from "./pdf-editor.js";
-import { renderApp } from "./render.js?v=navigation-focus-1";
+import { renderApp, retryDocumentPreview } from "./render.js?v=responsiveness-1";
 import { destroyRhwpEditor, initRhwpEditor, openRhwpEditor } from "./rhwp-editor.js";
 import { documentFormat, filterDocuments, matchProximity } from "./search.js?v=phrase-map-2";
 import { createStore, loadPublicSnapshot, loadSettings, saveSettings, selectSnapshotDocumentId } from "./store.js";
 import { createToast } from "./toast.js";
-import { createByteCache } from "./preview-cache.js?v=phrase-map-2";
-import { createSharedLibrary } from "./shared-library.js?v=sharing-1";
+import { createByteCache } from "./preview-cache.js?v=responsiveness-1";
 
 const forceDemo = new URLSearchParams(location.search).has("demo");
 const publicMode = BUILD_PROFILE.profile === "public";
 const sharedMode = BUILD_PROFILE.profile === "shared";
+const createSharedLibrary = sharedMode ? (await import('./shared-library.js?v=sharing-1')).createSharedLibrary : null;
 const localProfile = BUILD_PROFILE.profile === "local" && !new URLSearchParams(location.search).has("personal");
 const personalMode = !publicMode && !localProfile && !sharedMode;
 document.documentElement.dataset.profile = sharedMode ? "shared" : localProfile ? "local" : publicMode ? "public" : "private";
@@ -73,7 +73,7 @@ const sharedController = sharedMode ? createSharedLibrary({ notify: showToast, o
 } }) : null;
 
 function visibleDocuments(state) {
-  const externalContent = (state.mode === "content" || state.sharedMode) && (state.localMode || state.publicMode || state.personalMode || state.sharedMode || !state.settings.demoMode);
+  const externalContent = state.mode === "content" && (state.localMode || state.publicMode || state.personalMode || state.sharedMode || !state.settings.demoMode);
   if (externalContent && state.query.trim() && !state.contentMatches) return [];
   const source = externalContent && state.contentMatches ? state.contentMatches : state.documents;
   const query = externalContent ? "" : state.query;
@@ -102,6 +102,13 @@ let personalController;
 let personalControllerPromise;
 let personalIndex = { version: 1, entries: [] };
 let personalSignature = "";
+let publicGeneration = 0;
+let localCatalogGeneration = 0;
+const afterPaint = () => typeof requestAnimationFrame === 'undefined' ? Promise.resolve() : new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+const prepareWhenIdle = () => new Promise(resolve => setTimeout(() => {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(resolve, { timeout: 1000 });
+  else resolve();
+}, 200));
 async function getPersonalLibrary() {
   personalControllerPromise ||= import("./personal-library.js?v=drive-upload-1").then(({ createPersonalLibrary }) => {
     personalController = createPersonalLibrary({ onChange(snapshot) {
@@ -133,31 +140,44 @@ const deepLinkedId = new URLSearchParams(location.hash.slice(1)).get("doc") || "
 const publicSnapshotUrls = resolvePublicSnapshotUrls();
 
 async function loadPublishedCatalog() {
-  const snapshot = await loadPublicSnapshot(publicSnapshotUrls, new URL("../", import.meta.url).href);
-  const selectedId = selectSnapshotDocumentId(snapshot.documents, deepLinkedId);
-  if (deepLinkedId && selectedId !== deepLinkedId) history.replaceState(null, "", `${location.pathname}${location.search}`);
-  localIndexPromise = Promise.resolve({ version: 1, entries: snapshot.indexEntries });
-  updateView({
+  const job = ++publicGeneration; let displayed = false;
+  const showCatalog = async snapshot => {
+    if (job !== publicGeneration) return;
+    if (store.get().documents.length) searchSequence++;
+    searchClient.reset();
+    const selectedId = selectSnapshotDocumentId(snapshot.documents, store.get().selectedId || deepLinkedId);
+    if (deepLinkedId && selectedId !== deepLinkedId) history.replaceState(null, '', `${location.pathname}${location.search}`);
+    displayed = true;
+    updateView({
     publicMode: true,
     documents: snapshot.documents,
-    indexStats: summarizeIndex(snapshot.documents, snapshot.indexEntries),
+    indexStats: undefined, indexPreparation: 'loading',
     contentMatches: null,
     selectedId,
     sourceName: "게시 문서",
     lastSync: snapshot.generatedAt,
     connection: "local",
     notice: { visible: false, type: "success", title: `게시 문서 ${snapshot.documents.length}개를 불러왔습니다`, copy: "게시된 목록과 검색 색인을 사용합니다." }
-  });
+    });
+    await afterPaint();
+  };
+  const snapshot = await loadPublicSnapshot(publicSnapshotUrls, new URL('../', import.meta.url).href, fetch, showCatalog);
+  if (job !== publicGeneration) return;
+  if (!displayed) await showCatalog(snapshot);
+  localIndexPromise = Promise.resolve({ version: 1, entries: snapshot.indexEntries });
+  await searchClient.prepare?.(snapshot.indexEntries);
+  if (job === publicGeneration) updateView({ indexPreparation: 'ready', indexStats: summarizeIndex(snapshot.documents, snapshot.indexEntries) });
 }
 
 async function loadLocalCatalog() {
+  const job = ++localCatalogGeneration;
   const response = await fetch("private/catalog.json", { cache: "no-store" });
   if (!response.ok) return false;
   const catalog = await response.json();
+  if (job !== localCatalogGeneration) return false;
   if (catalog.version !== 1 || !Array.isArray(catalog.documents)) throw new Error("로컬 문서 목록 형식이 올바르지 않습니다.");
   const documents = catalog.documents;
-  localIndexPromise = undefined;
-  searchClient.reset();
+  if (catalog.generatedAt !== localRevision) { localIndexPromise = undefined; searchClient.reset(); searchSequence++; }
   localRevision = catalog.generatedAt;
   const current = store.get();
   const byId = new Map(documents.map((item) => [item.id, item]));
@@ -177,14 +197,38 @@ async function loadLocalCatalog() {
     connection: "local",
     notice: { visible: false, type: "success", title: `실제 문서 ${documents.length}개를 불러왔습니다`, copy: localProfile ? "문서 폴더의 추가·수정·삭제가 자동으로 반영됩니다." : "로컬 폴더의 색인을 사용합니다." }
   });
+  void prepareLocalSearch(catalog.generatedAt);
   return true;
+}
+
+async function prepareLocalSearch(revision) {
+  updateView({ indexPreparation: 'loading' });
+  await afterPaint();
+  await prepareWhenIdle();
+  if (revision !== localRevision) return;
+  try {
+    localIndexPromise ||= fetch(`private/search-index.json?revision=${encodeURIComponent(revision)}`, { cache: 'no-store' }).then(response => {
+      if (!response.ok) throw new Error('검색 자료를 불러오지 못했습니다.');
+      return response.json();
+    });
+    const index = await localIndexPromise;
+    if (revision !== localRevision) return;
+    if (index.version !== 1 || !Array.isArray(index.entries)) throw new Error('검색 색인 형식을 확인하세요.');
+    await searchClient.prepare?.(index.entries);
+    if (revision === localRevision) updateView({ indexPreparation: 'ready', indexStats: summarizeIndex(store.get().documents, index.entries) });
+  } catch {
+    if (revision === localRevision) { localIndexPromise = undefined; updateView({ indexPreparation: 'error' }); }
+  }
 }
 
 function updateView(patch) {
   store.update((state) => {
     const next = { ...state, ...(typeof patch === "function" ? patch(state) : patch) };
     next.results = visibleDocuments(next);
-    if (!next.results.some((item) => item.id === next.selectedId)) next.selectedId = next.results[0]?.id || "";
+    const preparingSearch = next.mode === "content" && next.query.trim() && !next.contentMatches;
+    const selected = next.documents.find(item => item.id === next.selectedId);
+    const preparingSelected = selected?.indexStatus === 'indexing';
+    if (!next.results.some((item) => item.id === next.selectedId) && !((preparingSearch || preparingSelected) && selected)) next.selectedId = next.results[0]?.id || "";
     return next;
   });
 }
@@ -203,7 +247,7 @@ async function syncDrive() {
   const state = store.get();
   try {
     if (state.sharedMode) await sharedController.sync();
-    else if (state.publicMode) await loadPublishedCatalog();
+    else if (state.publicMode) { publicBootPromise = loadPublishedCatalog(); await publicBootPromise; await runSearch(); }
     else if (state.localMode) { await loadLocalCatalog(); await runSearch(); }
     else await (await getPersonalLibrary()).sync();
   } catch (error) { showToast(error.message || "문서 목록을 불러오지 못했습니다."); }
@@ -229,7 +273,7 @@ async function runSearch() {
   const request = ++searchSequence;
   const state = store.get();
   const isCurrent = () => request === searchSequence && store.get().query === state.query && store.get().mode === state.mode;
-  if (state.sharedMode) {
+  if (state.sharedMode && state.mode === 'content') {
     if (!state.query.trim()) { updateView({ contentMatches: null }); return; }
     updateView({ searching: true, searchProgress: "검색 중" });
     try { const matches = await sharedController.search(state.query, state.mode); if (isCurrent()) updateView({ contentMatches: matches, searching: false, searchProgress: "" }); }
@@ -269,22 +313,22 @@ async function runSearch() {
 
 const cachedDocumentBytes = createByteCache(loadDocumentBytes);
 
-async function getDocumentBytes(documentItem) {
-  if (store.get().sharedMode) return sharedController.getBytes(documentItem);
+async function getDocumentBytes(documentItem, options) {
+  if (store.get().sharedMode) return sharedController.getBytes(documentItem, options);
   if (documentItem.libraryId) return (await getPersonalLibrary()).getBytes(documentItem);
   // Drive authorization is checked on every read, including cached originals.
   if (documentItem.source === "drive") return loadDocumentBytes(documentItem);
-  return cachedDocumentBytes(documentItem);
+  return cachedDocumentBytes(documentItem, options);
 }
 
-async function loadDocumentBytes(documentItem) {
+async function loadDocumentBytes(documentItem, { signal } = {}) {
   if (documentItem.source === "drive") {
     const accessToken = store.get().accessToken;
     if (!accessToken) throw new DriveError("한글 원문을 열려면 Google Drive를 다시 연결하세요.");
     return downloadDriveFile(accessToken, documentItem.id);
   }
   if (documentItem.sourceUrl) {
-    const response = await fetch(documentItem.sourceUrl);
+    const response = await fetch(documentItem.sourceUrl, { signal });
     if (!response.ok) throw new Error("예제 한글 문서를 불러오지 못했습니다.");
     return response.arrayBuffer();
   }
@@ -380,9 +424,16 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("#sync-button") || event.target.closest("#refresh-button")) await syncDrive();
   if (event.target.closest("#dismiss-notice")) updateView((state) => ({ notice: { ...state.notice, visible: false } }));
   if (event.target.closest("#clear-search")) {
+    sharedController?.cancelSearch();
     searchSequence += 1;
     clearTimeout(searchTimer);
     updateView({ query: "", folder: "전체", contentMatches: null, searching: false, searchProgress: "" });
+  }
+  if (event.target.closest('[data-preview-retry]')) { retryDocumentPreview(); updateView({}); }
+  if (event.target.closest('[data-index-retry]')) {
+    if (store.get().sharedMode) void sharedController.prepareSearch();
+    else if (store.get().publicMode) startPublishedCatalog();
+    else void prepareLocalSearch(localRevision);
   }
   if (event.target.closest("#detail-back")) detailPanel.close();
   if (event.target.closest("#local-hwp-button")) document.querySelector("#local-hwp-input").click();
@@ -411,20 +462,24 @@ window.addEventListener("resize", () => {
   document.querySelectorAll(".result-actions[open]").forEach((actions) => { actions.open = false; });
 });
 function queueSearch(patch) {
+  sharedController?.cancelSearch();
   searchSequence += 1;
   clearTimeout(searchTimer);
   updateView({ ...patch, contentMatches: null, searching: false, searchProgress: "" });
   const state = store.get();
-  if ((state.sharedMode || (state.localMode || state.publicMode || state.personalMode) && state.mode === "content") && state.query.trim()) searchTimer = setTimeout(runSearch, 180);
+  if ((state.sharedMode || state.localMode || state.publicMode || state.personalMode) && state.mode === "content" && state.query.trim()) searchTimer = setTimeout(runSearch, 180);
 }
 let composingQuery = false;
 document.querySelector("#search-input").addEventListener("compositionstart", () => {
   composingQuery = true;
+  document.querySelector('#search-input').dataset.composing = 'true';
+  sharedController?.cancelSearch();
   searchSequence += 1;
   clearTimeout(searchTimer);
 });
 document.querySelector("#search-input").addEventListener("compositionend", (event) => {
   composingQuery = false;
+  delete event.target.dataset.composing;
   queueSearch({ query: event.target.value });
 });
 document.querySelector("#search-input").addEventListener("input", (event) => {
@@ -481,16 +536,21 @@ else updateView({});
 if (sharedMode) {
   sharedController.start().catch((error) => showToast(error.message || "공유 문서함을 준비하지 못했습니다."));
 } else if (publicMode) {
-  publicBootPromise = loadPublishedCatalog();
-  publicBootPromise.catch(() => updateView({
-    connection: "error",
-    notice: { visible: true, type: "error", title: "게시 문서를 불러오지 못했습니다", copy: "게시된 목록과 검색 색인을 확인한 뒤 새로고침하세요." }
-  }));
+  startPublishedCatalog();
 } else if (localProfile) {
   loadLocalCatalog().catch(() => showToast("로컬 문서 목록을 불러오지 못했습니다."));
 } else if (personalMode) {
   // Preload before the first click so opening Google's popup stays synchronous.
   getPersonalLibrary().catch(() => showToast("문서함을 준비하지 못했습니다. 새로고침하세요."));
+}
+
+function startPublishedCatalog() {
+  publicBootPromise = loadPublishedCatalog();
+  const job = publicGeneration;
+  publicBootPromise.catch(() => job === publicGeneration && updateView({
+    connection: "error", indexPreparation: 'error',
+    notice: { visible: true, type: "error", title: "게시 문서를 불러오지 못했습니다", copy: "게시된 목록과 검색 색인을 확인한 뒤 새로고침하세요." }
+  }));
 }
 
 if (localProfile) {

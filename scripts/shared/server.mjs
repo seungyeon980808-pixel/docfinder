@@ -6,11 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { LibraryService } from './library-service.mjs';
+import { LibraryService, fileVersion } from './library-service.mjs';
 import { PublicLinks } from './public-links.mjs';
 import { SharedDrive } from './google-drive.mjs';
 import { googleVerifier, opaque, digest, csrfFor, equal, deny, HttpError } from './security.mjs';
 import { createJobs } from './jobs.mjs';
+import { createRenderScheduler } from '../../js/preview-scheduler.js';
 
 const appRoot = fileURLToPath(new URL('../../', import.meta.url));
 const mime = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream' };
@@ -31,6 +32,11 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
   const drive = providedDrive || new SharedDrive({ db, key, origin, clientId, clientSecret, maxFileBytes, folderCredentials });
   const service = new LibraryService(db, drive, maxFileBytes); const verifyIdentity = verify || googleVerifier(clientId);
   const publicLinks = new PublicLinks({ db, service, key });
+  const originalQueue = createRenderScheduler(2);
+  const readOriginal = (response, libraryId, documentId) => originalQueue.schedule(Symbol(), () => {
+    if (response.destroyed) deny(499, '중단한 문서 요청입니다.');
+    return drive.bytes(libraryId, documentId);
+  }, 0);
   const uploadsRoot = path.join(dataRoot, 'uploads'); await fs.mkdir(uploadsRoot, { recursive: true, mode: 0o700 });
   const jobs = jobsEnabled ? createJobs({ db, drive, service, extract }) : null;
   const rates = new Map();
@@ -98,8 +104,9 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
           response.setHeader('Set-Cookie', `df_guest=${guestToken}; Path=/api/public-links/${id}; HttpOnly; SameSite=Lax; Max-Age=3600${secure ? '; Secure' : ''}`);
           return write(response, 200, { ready: true });
         }
-        if (request.method !== 'GET') deny(405, '공유 링크는 열람만 가능합니다.');
+        if (request.method !== 'GET' && !(request.method === 'HEAD' && /^documents\/[a-zA-Z0-9_-]{1,128}\/original$/u.test(action))) deny(405, '공유 링크는 열람만 가능합니다.');
         if (!action) return write(response, 200, await publicLinks.catalog(id, token));
+        if (action === 'prepare') { const corpus = await publicLinks.corpus(id, token); return write(response, 200, { ready: true, revision: corpus.revision }); }
         if (action === 'search') return write(response, 200, { documents: await publicLinks.search(id, token, url.searchParams.get('q') || '', url.searchParams.get('mode') || 'content') });
         const original = /^documents\/([a-zA-Z0-9_-]{1,128})\/original$/u.exec(action);
         if (original) {
@@ -113,7 +120,14 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
             const row = await publicLinks.document(id, token, original[1]);
             if (Number(row.metadata.size) > maxFileBytes) deny(413, '열람 가능한 파일 크기를 초과했습니다.');
             if (url.searchParams.get('version') && url.searchParams.get('version') !== digest(row.version)) deny(409, '문서가 변경되었습니다. 목록을 새로고침하세요.');
-            const bytes = await drive.bytes(row.libraryId, original[1]);
+            if (request.method === 'HEAD') {
+              if (!drive.check) deny(405, '원문을 다시 불러오세요.');
+              if (fileVersion(await drive.check(row.libraryId, original[1])) !== row.version) deny(409, 'Drive 원문이 변경되었습니다. 목록을 갱신하세요.');
+              const latest = await publicLinks.document(id, token, original[1]);
+              if (latest.version !== row.version) deny(409, '문서가 변경되었습니다. 목록을 갱신하세요.');
+              response.writeHead(200); response.end(); return;
+            }
+            const bytes = await readOriginal(response, row.libraryId, original[1]);
             const latest = await publicLinks.document(id, token, original[1]);
             if (latest.version !== row.version) deny(409, '문서가 변경되었습니다. 목록을 새로고침하세요.');
             if (bytes.length > maxFileBytes) deny(413, '열람 가능한 파일 크기를 초과했습니다.');
@@ -168,6 +182,7 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
       if (!safeId(id)) deny(400, '문서함 주소를 확인하세요.');
       if (request.method === 'POST' && action === 'accept') { await service.accept(user, id); return write(response, 200, { accepted: true }); }
       if (request.method === 'GET' && !action) return write(response, 200, await service.catalog(user, id));
+      if (request.method === 'GET' && action === 'prepare') { const corpus = await service.corpus(user, id); return write(response, 200, { ready: true, revision: corpus.signature }); }
       if (request.method === 'GET' && action === 'search') return write(response, 200, { documents: await service.search(user, id, url.searchParams.get('q') || '', url.searchParams.get('mode') || 'content') });
       if (request.method === 'GET' && action === 'invitations') return write(response, 200, { invitations: await service.invitations(user, id) });
       if (request.method === 'POST' && action === 'invitations') { const { email } = await jsonBody(request); await service.invite(user, id, email); return write(response, 201, { invited: true }); }
@@ -229,10 +244,17 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
         service.cache.delete(id); return write(response, 200, { trashed: true });
       }
       if (document && request.method === 'POST' && document[2] === 'retry') { await service.retry(user, id, document[1]); return write(response, 202, { queued: true }); }
-      if (document && request.method === 'GET' && document[2] === 'original') {
+      if (document && ['GET', 'HEAD'].includes(request.method) && document[2] === 'original') {
         const row = await service.document(user, id, document[1]);
         if (url.searchParams.get('version') && url.searchParams.get('version') !== row.version) deny(409, '문서가 변경되었습니다. 목록을 새로고침하세요.');
-        const bytes = await drive.bytes(id, document[1]);
+        if (request.method === 'HEAD') {
+          if (!drive.check) deny(405, '원문을 다시 불러오세요.');
+          if (fileVersion(await drive.check(id, document[1])) !== row.version) deny(409, 'Drive 원문이 변경되었습니다. 목록을 갱신하세요.');
+          const latest = await service.document(user, id, document[1]);
+          if (latest.version !== row.version || latest.metadata.sourceFolderId !== row.metadata.sourceFolderId) deny(409, '문서 또는 폴더 연결이 변경되었습니다.');
+          response.writeHead(200); response.end(); return;
+        }
+        const bytes = await readOriginal(response, id, document[1]);
         await service.permission(user, id); // Permission can change while Drive is responding.
         if (row.metadata.sourceFolderId) {
           const latest = await service.document(user, id, document[1]);
@@ -254,6 +276,8 @@ export async function createSharedServer({ db, key, origin, clientId = '', clien
     const file = await fs.realpath(path.join(appRoot, relative)).catch(() => deny(404, '찾을 수 없습니다.'));
     if (!file.startsWith(appRoot) || !(await fs.stat(file)).isFile()) deny(404, '찾을 수 없습니다.');
     response.setHeader('Content-Type', mime[path.extname(file)] || 'application/octet-stream');
+    // Only public engine binaries/fonts use HTTP caching; private data stays no-store.
+    if (relative.startsWith('vendor/')) response.setHeader('Cache-Control', 'public, max-age=86400');
     if (request.method === 'HEAD') { response.end(); return; }
     if (relative === 'index.html') { response.end((await fs.readFile(file, 'utf8')).replace('<head>', '<head>\n    <base href="/" />')); return; }
     await pipeline(createReadStream(file), response);

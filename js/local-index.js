@@ -7,17 +7,39 @@ const grams = (text) => {
   return result;
 };
 
-export function createPageSearchIndex(entries) {
-  const pages = entries.map((entry) => ({ ...entry, prepared: prepareSearchText(entry.text) }));
+function* pageIndexSteps(entries) {
+  const pages = [];
   const postings = new Map();
-  for (let page = 0; page < pages.length; page += 1) {
-    for (const gram of grams(pages[page].prepared.compact)) {
+  for (const entry of entries) {
+    const page = pages.length;
+    const prepared = prepareSearchText(entry.text);
+    pages.push({ ...entry, prepared });
+    for (const gram of grams(prepared.compact)) {
       if (!postings.has(gram)) postings.set(gram, []);
       postings.get(gram).push(page);
     }
+    yield;
   }
   for (const [gram, pages] of postings) postings.set(gram, Uint32Array.from(pages));
   return { pages, postings };
+}
+
+export function createPageSearchIndex(entries) {
+  const steps = pageIndexSteps(entries); let step;
+  do { step = steps.next(); } while (!step.done);
+  return step.value;
+}
+
+// Server preparation yields between pages so catalog/original requests stay live.
+// Browser construction remains in its existing search worker.
+export async function prepareLocalIndex(entries, yieldControl) {
+  if (cachedIndexes.has(entries)) return;
+  const steps = pageIndexSteps(entries); let step; let deadline = performance.now() + 8;
+  do {
+    step = steps.next();
+    if (!step.done && performance.now() >= deadline) { await yieldControl(); deadline = performance.now() + 8; }
+  } while (!step.done);
+  cachedIndexes.set(entries, step.value);
 }
 
 function includesPage(pages, page) {

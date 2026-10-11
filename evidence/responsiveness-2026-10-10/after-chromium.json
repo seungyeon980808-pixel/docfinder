@@ -1,0 +1,2577 @@
+{
+  "browser": "chromium",
+  "repeats": 5,
+  "fixture": {
+    "documents": 16,
+    "pagesPerDocument": 24,
+    "indexCharacters": 6220800,
+    "originalBytes": 7144,
+    "apiDelayMs": 150,
+    "fullCorpusDelayMs": 600,
+    "originalDelayMs": 1000,
+    "viewport": "1280x800",
+    "deviceScaleFactor": 2
+  },
+  "methodology": {
+    "firstDisplayMs": "navigation to painted document list (two animation frames)",
+    "interactiveMs": "navigation to trusted document click reflected by selected state and two animation frames",
+    "originalDisplayMs": "navigation to painted original canvas after selecting document 01",
+    "nameFeedbackMs": "trusted input fill to matching document list and two animation frames",
+    "visits": "cold = fresh browser context and empty corpus cache; repeat = reload same context, warm corpus/assets",
+    "limitations": "local synthetic API/Drive delay, not production or 5E; rendering and PGlite database are real"
+  },
+  "sources": {
+    "js/app.js": "292bda1e049a52f1f2202dbf3f2d7d94546b22652df0ad869150d200266b6a69",
+    "js/render.js": "3dd4b79c0ee12dceac854d754b0f16d1c72a69c3e5f9afc315079e949baac6a3",
+    "js/pdf-preview.js": "9a4e78c386035ecaf9ffbe1b8c33a7f6870c9ea3d040dac1725bff2c380878bd",
+    "js/shared-library.js": "3462b0edf8abc9f2b8a594f755a0ef062dd36f1a93882105338a3f19852b9e8d",
+    "scripts/shared/library-service.mjs": "f27cdf7b8ceb8b04b19ac13d409e3380660e17e8e79a2f46287697a517f4dd86"
+  },
+  "samples": [
+    {
+      "repetition": 1,
+      "visit": "cold",
+      "firstDisplayMs": 957.2999999970198,
+      "interactiveMs": 1002.7999999970198,
+      "originalDisplayMs": 2239,
+      "originalQualityDisplayMs": 2254.39999999851,
+      "nameFeedbackMs": 11.5,
+      "originalReads": 2,
+      "fullCorpusReads": 1,
+      "resources": [
+        {
+          "path": "/styles/base.css",
+          "duration": 2.9000000059604645,
+          "bytes": 4213
+        },
+        {
+          "path": "/styles/app.css",
+          "duration": 3.399999998509884,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 3.5,
+          "bytes": 4526
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 3.7000000029802322,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 0.7999999970197678,
+          "bytes": 834
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 3.399999998509884,
+          "bytes": 333
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 5.200000002980232,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 5.100000001490116,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 5.200000002980232,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 6.600000001490116,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 7,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 7.799999997019768,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 7.899999998509884,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 7.399999998509884,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 7.899999998509884,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 9.699999995529652,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 10.100000001490116,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 9.699999995529652,
+          "bytes": 3613
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 429.69999999552965,
+          "bytes": 0
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 3.7999999970197678,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 2.2000000029802322,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 2.2999999970197678,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 3.399999998509884,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 3.5,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 3.6999999955296516,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 4,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 1.7999999970197678,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 1.8999999985098839,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 2.399999998509884,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 1.5,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 1.5,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 2.9000000059604645,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 0.7000000029802322,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 1,
+          "bytes": 9394
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 1.1000000014901161,
+          "bytes": 1710
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 1.2999999970197678,
+          "bytes": 4606
+        },
+        {
+          "path": "/api/session",
+          "duration": 152.79999999701977,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 153.60000000149012,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 558.3999999985099,
+          "bytes": 13179
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 4.399999998509884,
+          "bytes": 860684
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 46.79999999701977,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/prepare",
+          "duration": 1033,
+          "bytes": 392
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1156,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 6,
+          "bytes": 2228789
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1156.5,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.399999998509884,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 156.30000000447035,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.1999999955296516,
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "visit": "repeat",
+      "firstDisplayMs": 515.5,
+      "interactiveMs": 555.1999999955297,
+      "originalDisplayMs": 1797.3999999985099,
+      "originalQualityDisplayMs": 1813.5,
+      "nameFeedbackMs": 13.700000002980232,
+      "originalReads": 2,
+      "fullCorpusReads": 0,
+      "resources": [
+        {
+          "path": "/styles/base.css",
+          "duration": 2.100000001490116,
+          "bytes": 4213
+        },
+        {
+          "path": "/styles/app.css",
+          "duration": 2.1999999955296516,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 2.899999998509884,
+          "bytes": 4526
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 3.0999999940395355,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 1.3000000044703484,
+          "bytes": 834
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 1.6000000014901161,
+          "bytes": 333
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 2.7000000029802322,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 2.8000000044703484,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 3.3000000044703484,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 3.7000000029802322,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 5.100000001490116,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 5.200000002980232,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 6.200000002980232,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 6.300000004470348,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 6.799999997019768,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 6.799999997019768,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 7.600000001490116,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 7.799999997019768,
+          "bytes": 3613
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 4.899999998509884,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 4.899999998509884,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 2.7000000029802322,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 2.8000000044703484,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 3.600000001490116,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 3.9000000059604645,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 4.200000002980232,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 1.8999999985098839,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 2.100000001490116,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 2.2999999970197678,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 2.7000000029802322,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 2.7000000029802322,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 1.3000000044703484,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 0.7999999970197678,
+          "bytes": 4606
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 0.8999999985098839,
+          "bytes": 9394
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 0.8999999985098839,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 1,
+          "bytes": 1710
+        },
+        {
+          "path": "/api/session",
+          "duration": 151.89999999850988,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 154.20000000298023,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 158.89999999850988,
+          "bytes": 13178
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 36.399999998509884,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1158.1999999955297,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.399999998509884,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1157.5,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.5,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 155.30000000447035,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.600000001490116,
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "visit": "cold",
+      "firstDisplayMs": 923.1000000014901,
+      "interactiveMs": 971.7000000029802,
+      "originalDisplayMs": 2190.60000000149,
+      "originalQualityDisplayMs": 2207.89999999851,
+      "nameFeedbackMs": 13.299999997019768,
+      "originalReads": 2,
+      "fullCorpusReads": 1,
+      "resources": [
+        {
+          "path": "/styles/base.css",
+          "duration": 1.3999999985098839,
+          "bytes": 4213
+        },
+        {
+          "path": "/styles/app.css",
+          "duration": 1.6999999955296516,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 2,
+          "bytes": 4526
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 1.9000000059604645,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 0.5,
+          "bytes": 834
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 3.100000001490116,
+          "bytes": 333
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 3.399999998509884,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 4.799999997019768,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 5.200000002980232,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 5.299999997019768,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 5.399999998509884,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 6.5,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 6.600000001490116,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 7.5,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 8.100000001490116,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 8.5,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 8.700000002980232,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 9.200000002980232,
+          "bytes": 3613
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 441.29999999701977,
+          "bytes": 0
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 4.100000001490116,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 5.199999995529652,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 5.100000001490116,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 5.600000001490116,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 5.600000001490116,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 6.100000001490116,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 6.600000001490116,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 3.5999999940395355,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 3.5,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 3.600000001490116,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 3.6999999955296516,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 3.6999999955296516,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 1.0999999940395355,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 0.6000000014901161,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 0.6000000014901161,
+          "bytes": 4606
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 0.7000000029802322,
+          "bytes": 9394
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 1,
+          "bytes": 1710
+        },
+        {
+          "path": "/api/session",
+          "duration": 152.90000000596046,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 156.69999999552965,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 556.1000000014901,
+          "bytes": 13179
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 4.100000001490116,
+          "bytes": 860684
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 51.399999998509884,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/prepare",
+          "duration": 1027.2999999970198,
+          "bytes": 392
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1155,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.3000000044703484,
+          "bytes": 2228789
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1157.9000000059605,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.7000000029802322,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 154.79999999701977,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2,
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "visit": "repeat",
+      "firstDisplayMs": 507.5,
+      "interactiveMs": 547.8999999985099,
+      "originalDisplayMs": 1781.5,
+      "originalQualityDisplayMs": 1797.7000000029802,
+      "nameFeedbackMs": 14.599999994039536,
+      "originalReads": 2,
+      "fullCorpusReads": 0,
+      "resources": [
+        {
+          "path": "/styles/base.css",
+          "duration": 1.6000000014901161,
+          "bytes": 4213
+        },
+        {
+          "path": "/styles/app.css",
+          "duration": 2.2000000029802322,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 2.2000000029802322,
+          "bytes": 4526
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 2.600000001490116,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 1.1000000014901161,
+          "bytes": 834
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 1.6000000014901161,
+          "bytes": 333
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 1.8999999985098839,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 2.600000001490116,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 2.899999998509884,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 3.2999999970197678,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 4,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 4.100000001490116,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 4.199999995529652,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 5.100000001490116,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 5.299999997019768,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 5.600000001490116,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 6.100000001490116,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 6.299999997019768,
+          "bytes": 3613
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 3.399999998509884,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 3.7000000029802322,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 2.600000001490116,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 3.399999998509884,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 3.899999998509884,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 4,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 4.199999995529652,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 2,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 2.100000001490116,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 2.399999998509884,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 2.100000001490116,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 2.2000000029802322,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 1,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 0.8000000044703484,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 1,
+          "bytes": 4606
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 1.1000000014901161,
+          "bytes": 9394
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 1.3999999985098839,
+          "bytes": 1710
+        },
+        {
+          "path": "/api/session",
+          "duration": 152.79999999701977,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 155.70000000298023,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 158.89999999850988,
+          "bytes": 13178
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 34.399999998509884,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1159.7999999970198,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.600000001490116,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1157.8999999985099,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.6999999955296516,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 154.89999999850988,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 1.1000000014901161,
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "visit": "cold",
+      "firstDisplayMs": 930.3000000044703,
+      "interactiveMs": 980.8000000044703,
+      "originalDisplayMs": 2189.7000000029802,
+      "originalQualityDisplayMs": 2205.2000000029802,
+      "nameFeedbackMs": 14.5,
+      "originalReads": 2,
+      "fullCorpusReads": 1,
+      "resources": [
+        {
+          "path": "/styles/base.css",
+          "duration": 1.6999999955296516,
+          "bytes": 4213
+        },
+        {
+          "path": "/styles/app.css",
+          "duration": 2,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 2.399999998509884,
+          "bytes": 4526
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 2.5,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 0.8000000044703484,
+          "bytes": 834
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 3,
+          "bytes": 333
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 4.100000001490116,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 4.200000002980232,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 4.800000004470348,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 5.300000004470348,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 5.4000000059604645,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 5.800000004470348,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 6.5,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 7.200000002980232,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 7.4000000059604645,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 7.9000000059604645,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 8,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 8.700000002980232,
+          "bytes": 3613
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 511.40000000596046,
+          "bytes": 0
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 4.399999998509884,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 4.200000002980232,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 3.2999999970197678,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 3.7999999970197678,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 3.7999999970197678,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 4.700000002980232,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 5.399999998509884,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 2.2000000029802322,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 2.5,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 2.600000001490116,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 2.5,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 2.899999998509884,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 1.3999999985098839,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 1.3000000044703484,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 1.6000000014901161,
+          "bytes": 4606
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 1.8000000044703484,
+          "bytes": 1710
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 1.7000000029802322,
+          "bytes": 9394
+        },
+        {
+          "path": "/api/session",
+          "duration": 153.29999999701977,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 153.19999999552965,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 562.6000000014901,
+          "bytes": 13179
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 4.700000002980232,
+          "bytes": 860684
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 58.600000001490116,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/prepare",
+          "duration": 1018.2999999970198,
+          "bytes": 392
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1156.7999999970198,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 1.7999999970197678,
+          "bytes": 2228789
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1157.1000000014901,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 1.2999999970197678,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 155,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 1,
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "visit": "repeat",
+      "firstDisplayMs": 507.69999999552965,
+      "interactiveMs": 547.6999999955297,
+      "originalDisplayMs": 1765.6999999955297,
+      "originalQualityDisplayMs": 1780,
+      "nameFeedbackMs": 15.5,
+      "originalReads": 2,
+      "fullCorpusReads": 0,
+      "resources": [
+        {
+          "path": "/styles/base.css",
+          "duration": 1.5,
+          "bytes": 4213
+        },
+        {
+          "path": "/styles/app.css",
+          "duration": 1.5,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 2.100000001490116,
+          "bytes": 4526
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 2.2000000029802322,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 0.8999999985098839,
+          "bytes": 834
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 1.2999999970197678,
+          "bytes": 333
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 2.0999999940395355,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 2.399999998509884,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 3,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 3.399999998509884,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 3.5999999940395355,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 3.8000000044703484,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 4.300000004470348,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 4.399999998509884,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 4.800000004470348,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 5.100000001490116,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 5.600000001490116,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 5.800000004470348,
+          "bytes": 3613
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 3.3000000044703484,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 2.899999998509884,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 2.399999998509884,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 2.399999998509884,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 2.7999999970197678,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 3.100000001490116,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 3.600000001490116,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 1.5,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 1.5,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 1.7000000029802322,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 2,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 1.7999999970197678,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 1,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 0.6999999955296516,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 0.6999999955296516,
+          "bytes": 4606
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 0.6999999955296516,
+          "bytes": 1710
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 0.6999999955296516,
+          "bytes": 9394
+        },
+        {
+          "path": "/api/session",
+          "duration": 153.79999999701977,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 156.59999999403954,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 158,
+          "bytes": 13178
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 36.399999998509884,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1157.5,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.3000000044703484,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1159.2999999970198,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.5,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 157.09999999403954,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.5999999940395355,
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "repetition": 4,
+      "visit": "cold",
+      "firstDisplayMs": 937.2999999970198,
+      "interactiveMs": 985.2999999970198,
+      "originalDisplayMs": 2212.5999999940395,
+      "originalQualityDisplayMs": 2228.7999999970198,
+      "nameFeedbackMs": 14.799999997019768,
+      "originalReads": 2,
+      "fullCorpusReads": 1,
+      "resources": [
+        {
+          "path": "/styles/base.css",
+          "duration": 1.7000000029802322,
+          "bytes": 4213
+        },
+        {
+          "path": "/styles/app.css",
+          "duration": 2,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 2.2999999970197678,
+          "bytes": 4526
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 2.5,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 0.6000000014901161,
+          "bytes": 834
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 3.3000000044703484,
+          "bytes": 333
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 4.100000001490116,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 4.4000000059604645,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 4.800000004470348,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 5.200000002980232,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 5.600000001490116,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 5.700000002980232,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 6.5,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 7,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 7.300000004470348,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 7.700000002980232,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 8.200000002980232,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 8.299999997019768,
+          "bytes": 3613
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 559.5,
+          "bytes": 0
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 4.199999995529652,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 4.100000001490116,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 3,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 3.600000001490116,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 4,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 4.100000001490116,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 4.799999997019768,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 2,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 2.399999998509884,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 2.5999999940395355,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 2.1999999955296516,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 2.5,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 1.2999999970197678,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 1.3000000044703484,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 1.3000000044703484,
+          "bytes": 9394
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 1.3999999985098839,
+          "bytes": 4606
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 1.6000000014901161,
+          "bytes": 1710
+        },
+        {
+          "path": "/api/session",
+          "duration": 153.80000000447035,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 153.19999999552965,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 573.6000000014901,
+          "bytes": 13179
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 3.600000001490116,
+          "bytes": 860684
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 53.29999999701977,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/prepare",
+          "duration": 1048.1000000014901,
+          "bytes": 392
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1157.2999999970198,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.399999998509884,
+          "bytes": 2228789
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1158.7000000029802,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.2000000029802322,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 152.70000000298023,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 1.2999999970197678,
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "repetition": 4,
+      "visit": "repeat",
+      "firstDisplayMs": 506.19999999552965,
+      "interactiveMs": 548.1999999955297,
+      "originalDisplayMs": 1776,
+      "originalQualityDisplayMs": 1789.3999999985099,
+      "nameFeedbackMs": 14.799999997019768,
+      "originalReads": 2,
+      "fullCorpusReads": 0,
+      "resources": [
+        {
+          "path": "/styles/app.css",
+          "duration": 1.5,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 1.8999999985098839,
+          "bytes": 4526
+        },
+        {
+          "path": "/styles/base.css",
+          "duration": 2.100000001490116,
+          "bytes": 4213
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 2.2000000029802322,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 1,
+          "bytes": 834
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 1.7000000029802322,
+          "bytes": 333
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 2.100000001490116,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 2.3000000044703484,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 2.7000000029802322,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 3.399999998509884,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 3.8000000044703484,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 4.200000002980232,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 4.200000002980232,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 4.600000001490116,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 4.700000002980232,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 5.299999997019768,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 5.600000001490116,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 6.100000001490116,
+          "bytes": 3613
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 3.4000000059604645,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 2.7000000029802322,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 2.100000001490116,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 2.8000000044703484,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 3.2000000029802322,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 3.7000000029802322,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 3.7000000029802322,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 1.7999999970197678,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 1.7999999970197678,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 2.2999999970197678,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 1.6000000014901161,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 1.8000000044703484,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 1,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 0.6999999955296516,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 0.8000000044703484,
+          "bytes": 4606
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 0.6000000014901161,
+          "bytes": 9394
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 0.7000000029802322,
+          "bytes": 1710
+        },
+        {
+          "path": "/api/session",
+          "duration": 153.19999999552965,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 154.09999999403954,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 155.69999999552965,
+          "bytes": 13178
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 45.70000000298023,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1159.8999999985099,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.7999999970197678,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1160,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.5,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 153.29999999701977,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 1.1999999955296516,
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "repetition": 5,
+      "visit": "cold",
+      "firstDisplayMs": 923.3999999985099,
+      "interactiveMs": 970.2999999970198,
+      "originalDisplayMs": 2182.60000000149,
+      "originalQualityDisplayMs": 2197.89999999851,
+      "nameFeedbackMs": 14.599999994039536,
+      "originalReads": 2,
+      "fullCorpusReads": 1,
+      "resources": [
+        {
+          "path": "/styles/base.css",
+          "duration": 1.3000000044703484,
+          "bytes": 4213
+        },
+        {
+          "path": "/styles/app.css",
+          "duration": 1.3999999985098839,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 1.5,
+          "bytes": 4526
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 1.7000000029802322,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 0.4000000059604645,
+          "bytes": 834
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 2.2999999970197678,
+          "bytes": 333
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 2.8000000044703484,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 3.2000000029802322,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 3.3000000044703484,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 4.4000000059604645,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 4.5,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 4.700000002980232,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 4.800000004470348,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 4.9000000059604645,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 5.300000004470348,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 6,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 6.100000001490116,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 6.399999998509884,
+          "bytes": 3613
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 808.8000000044703,
+          "bytes": 0
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 3.3000000044703484,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 1.8000000044703484,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 1.7000000029802322,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 2.8000000044703484,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 2.8000000044703484,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 2.9000000059604645,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 3,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 1.5,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 1.5999999940395355,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 1.9000000059604645,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 1.2000000029802322,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 1.2000000029802322,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 1,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 0.5,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 0.7000000029802322,
+          "bytes": 1710
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 0.5,
+          "bytes": 4606
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 0.6000000014901161,
+          "bytes": 9394
+        },
+        {
+          "path": "/api/session",
+          "duration": 152.60000000149012,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 152.20000000298023,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 572.1000000014901,
+          "bytes": 13179
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 2.2000000029802322,
+          "bytes": 860684
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 49.899999998509884,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/prepare",
+          "duration": 1010.7000000029802,
+          "bytes": 392
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1157.7000000029802,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 3.2000000029802322,
+          "bytes": 2228789
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1159,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.6999999955296516,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 155,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 1.1000000014901161,
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "repetition": 5,
+      "visit": "repeat",
+      "firstDisplayMs": 505.80000000447035,
+      "interactiveMs": 547.5,
+      "originalDisplayMs": 1774,
+      "originalQualityDisplayMs": 1789.2000000029802,
+      "nameFeedbackMs": 14.399999998509884,
+      "originalReads": 2,
+      "fullCorpusReads": 0,
+      "resources": [
+        {
+          "path": "/styles/base.css",
+          "duration": 2.0999999940395355,
+          "bytes": 4213
+        },
+        {
+          "path": "/styles/app.css",
+          "duration": 2.7000000029802322,
+          "bytes": 35898
+        },
+        {
+          "path": "/styles/responsive.css",
+          "duration": 3,
+          "bytes": 4526
+        },
+        {
+          "path": "/js/app.js",
+          "duration": 3.100000001490116,
+          "bytes": 33379
+        },
+        {
+          "path": "/config.js",
+          "duration": 1.1000000014901161,
+          "bytes": 834
+        },
+        {
+          "path": "/gsi/client",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/data/demo-documents.js",
+          "duration": 2,
+          "bytes": 333
+        },
+        {
+          "path": "/js/detail-panel.js",
+          "duration": 2.399999998509884,
+          "bytes": 1402
+        },
+        {
+          "path": "/js/workspace-activity.js",
+          "duration": 3.100000001490116,
+          "bytes": 1813
+        },
+        {
+          "path": "/js/drive-api.js",
+          "duration": 3.5,
+          "bytes": 11836
+        },
+        {
+          "path": "/js/search-client.js",
+          "duration": 3.600000001490116,
+          "bytes": 2511
+        },
+        {
+          "path": "/js/index-health.js",
+          "duration": 4.399999998509884,
+          "bytes": 1648
+        },
+        {
+          "path": "/js/pdf-editor.js",
+          "duration": 4.5,
+          "bytes": 1263
+        },
+        {
+          "path": "/js/render.js",
+          "duration": 4.899999998509884,
+          "bytes": 23143
+        },
+        {
+          "path": "/js/rhwp-editor.js",
+          "duration": 5.700000002980232,
+          "bytes": 5670
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 6.200000002980232,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/store.js",
+          "duration": 6.399999998509884,
+          "bytes": 7026
+        },
+        {
+          "path": "/js/toast.js",
+          "duration": 6.899999998509884,
+          "bytes": 590
+        },
+        {
+          "path": "/js/preview-cache.js",
+          "duration": 7.199999995529652,
+          "bytes": 3613
+        },
+        {
+          "path": "/js/search.js",
+          "duration": 3.8000000044703484,
+          "bytes": 5261
+        },
+        {
+          "path": "/js/local-index.js",
+          "duration": 4.200000002980232,
+          "bytes": 5848
+        },
+        {
+          "path": "/js/pdf-preview.js",
+          "duration": 3.399999998509884,
+          "bytes": 15785
+        },
+        {
+          "path": "/js/hwp-preview.js",
+          "duration": 3.7999999970197678,
+          "bytes": 10248
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 4.199999995529652,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/preview-navigation.js",
+          "duration": 4.399999998509884,
+          "bytes": 12562
+        },
+        {
+          "path": "/js/preview-position.js",
+          "duration": 4.799999997019768,
+          "bytes": 2316
+        },
+        {
+          "path": "/js/pdf-text-content.js",
+          "duration": 1.8999999985098839,
+          "bytes": 993
+        },
+        {
+          "path": "/js/preview-scheduler.js",
+          "duration": 2.100000001490116,
+          "bytes": 1755
+        },
+        {
+          "path": "/js/preview-viewport.js",
+          "duration": 2.399999998509884,
+          "bytes": 2757
+        },
+        {
+          "path": "/js/hwp-highlights.js",
+          "duration": 2.100000001490116,
+          "bytes": 3914
+        },
+        {
+          "path": "/js/hwp-renderer.js",
+          "duration": 2.100000001490116,
+          "bytes": 1733
+        },
+        {
+          "path": "/js/shared-library.js",
+          "duration": 1.2000000029802322,
+          "bytes": 22109
+        },
+        {
+          "path": "/js/search-matches.js",
+          "duration": 1.2000000029802322,
+          "bytes": 5493
+        },
+        {
+          "path": "/js/guest-library.js",
+          "duration": 1.3999999985098839,
+          "bytes": 4606
+        },
+        {
+          "path": "/js/public-sharing.js",
+          "duration": 1.3999999985098839,
+          "bytes": 9394
+        },
+        {
+          "path": "/js/background-index.js",
+          "duration": 1.3999999985098839,
+          "bytes": 1710
+        },
+        {
+          "path": "/api/session",
+          "duration": 153.5,
+          "bytes": 529
+        },
+        {
+          "path": "/api/libraries",
+          "duration": 153.70000000298023,
+          "bytes": 513
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de",
+          "duration": 156.29999999701977,
+          "bytes": 13178
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.mjs",
+          "duration": 0,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 44.899999998509884,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 1156.7999999970198,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.7000000029802322,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-00/original",
+          "duration": 1161.8999999985099,
+          "bytes": 7444
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 3.3000000044703484,
+          "bytes": 0
+        },
+        {
+          "path": "/api/libraries/09ee6b9d-8967-46f8-8f74-06fdad0202de/documents/bench-01/original",
+          "duration": 157.10000000149012,
+          "bytes": 300
+        },
+        {
+          "path": "/vendor/pdfjs/pdf.worker.mjs",
+          "duration": 2.100000001490116,
+          "bytes": 0
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "cold": {
+      "firstDisplayMs": {
+        "median": 930.3000000044703,
+        "p95": 957.2999999970198
+      },
+      "interactiveMs": {
+        "median": 980.8000000044703,
+        "p95": 1002.7999999970198
+      },
+      "originalDisplayMs": {
+        "median": 2190.60000000149,
+        "p95": 2239
+      },
+      "nameFeedbackMs": {
+        "median": 14.5,
+        "p95": 14.799999997019768
+      }
+    },
+    "repeat": {
+      "firstDisplayMs": {
+        "median": 507.5,
+        "p95": 515.5
+      },
+      "interactiveMs": {
+        "median": 547.8999999985099,
+        "p95": 555.1999999955297
+      },
+      "originalDisplayMs": {
+        "median": 1776,
+        "p95": 1797.3999999985099
+      },
+      "nameFeedbackMs": {
+        "median": 14.599999994039536,
+        "p95": 15.5
+      }
+    }
+  },
+  "errors": [],
+  "maxOriginals": 1
+}

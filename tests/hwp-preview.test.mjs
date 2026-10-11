@@ -19,6 +19,7 @@ async function harness({ initialize, renderPage } = {}) {
   const root = { clientWidth: 600, clientHeight: 600, addEventListener() {}, removeEventListener() {}, scrollTo() {} };
   const status = {};
   const context = vm.createContext({
+    AbortController,
     document: { querySelector: (selector) => selector === "#document-detail" ? root : status },
     IntersectionObserver: class { constructor(callback) { this.callback = callback; } observe(target) { this.callback([{ isIntersecting: true, target }]); } disconnect() {} },
     ResizeObserver: class { observe() {} disconnect() {} },

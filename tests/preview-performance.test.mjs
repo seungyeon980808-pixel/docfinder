@@ -17,6 +17,8 @@ test("concurrent original requests share the download and give transferable priv
   assert.deepEqual([...new Uint8Array(await load(item))], [1, 2, 3]);
   await load({ ...item, sourceUrl: "a.pdf?v=2" });
   assert.equal(loads, 2, "updated originals must not reuse the previous bytes");
+  await load({ ...item, sha256: 'old' }); await load({ ...item, sha256: 'new' });
+  assert.equal(loads, 4, 'same URL and timestamp cannot hide changed original content');
 });
 
 test("failed original fetch is retried and byte cache respects the budget", async () => {

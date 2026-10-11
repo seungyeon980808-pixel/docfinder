@@ -3,9 +3,11 @@ import { clearHwpPreview, renderHwpPreview, updateHwpPreview } from "./hwp-previ
 
 import { escapeHtml, highlightMarkup as highlight } from "./search-matches.js?v=phrase-map-2";
 import { clearPreviewNavigation } from "./preview-navigation.js?v=navigation-focus-1";
-import { previewSourceKey } from "./preview-cache.js?v=phrase-map-2";
+import { previewSourceKey } from "./preview-cache.js?v=responsiveness-1";
 import { setWorkspaceDocument } from "./workspace-activity.js?v=navigation-focus-1";
-import { clearPreviewPositions } from "./preview-position.js?v=navigation-focus-1";
+import { clearPreviewPositions, carryPreviewPosition } from "./preview-position.js?v=navigation-focus-1";
+
+let previousPreview;
 
 function formatDate(value) {
   if (!value) return "-";
@@ -49,6 +51,9 @@ function folderPath(documentItem) {
 }
 
 function renderFolders(state) {
+  const key = JSON.stringify([state.documents.map(item => item.folder), state.folder]);
+  if (document.querySelector('#folder-navigation').dataset.key === key) return;
+  document.querySelector('#folder-navigation').dataset.key = key;
   document.querySelector(".folder-panel").hidden = folderEntries(state.documents).length <= 2;
   document.querySelector("#folder-navigation").innerHTML = folderEntries(state.documents).map(([folder, count]) => `
     <button class="folder-button${state.folder === folder ? " is-active" : ""}" type="button" data-folder="${escapeHtml(folder)}" aria-current="${state.folder === folder ? "page" : "false"}">
@@ -56,7 +61,31 @@ function renderFolders(state) {
     </button>`).join("");
 }
 
+let listSignature;
 function renderDocuments(state) {
+  const list = document.querySelector('#document-list');
+  const key = JSON.stringify([state.results, state.query, state.mode, state.documents.length, state.sharedPending, state.sharedAccessError,
+    state.sharedGuest, state.sharedUser?.id, state.sharedLibrary?.role, state.personalBusy, state.searching, state.contentMatches === null]);
+  if (listSignature !== key) {
+    const focusedId = document.activeElement?.closest?.('[data-document-id]')?.dataset.documentId;
+    const scroll = document.querySelector('.document-table'); const top = scroll.scrollTop;
+    const openId = list.querySelector('.result-actions[open]')?.closest('[data-result-id]')?.dataset.resultId;
+    writeDocuments(state); listSignature = key;
+    scroll.scrollTop = top;
+    if (focusedId) list.querySelector(`[data-document-id="${CSS.escape(focusedId)}"]`)?.focus({ preventScroll: true });
+    if (openId) { const menu = list.querySelector(`[data-result-id="${CSS.escape(openId)}"] details`); if (menu) menu.open = true; }
+  }
+  for (const row of list.querySelectorAll('[data-result-id]')) {
+    const selected = row.dataset.resultId === state.selectedId;
+    row.classList.toggle('is-selected', selected);
+    row.querySelector('[data-document-id]').setAttribute('aria-current', String(selected));
+    const label = row.querySelector('.document-selection-label');
+    if (!selected) label?.remove();
+    else if (!label) { const node = document.createElement('span'); node.className = 'document-selection-label'; node.textContent = '선택됨'; row.querySelector('.document-name').append(node); }
+  }
+}
+
+function writeDocuments(state) {
   const list = document.querySelector("#document-list");
   if (state.sharedMode && state.sharedPending) { list.replaceChildren(); return; }
   if (!state.results.length) {
@@ -115,6 +144,11 @@ function hwpPreview() {
   return '<section class="hwp-preview" aria-label="한글 원문"><p class="preview-loading" role="status">한글 원문을 여는 중입니다</p></section>';
 }
 
+export function retryDocumentPreview() {
+  clearPdfPreview(); clearHwpPreview();
+  document.querySelector('#document-detail').dataset.key = '';
+}
+
 function renderDetail(state, getBytes) {
   const documentItem = state.results.find((candidate) => candidate.id === state.selectedId)
     || state.documents.find((candidate) => candidate.id === state.selectedId);
@@ -125,6 +159,7 @@ function renderDetail(state, getBytes) {
     clearHwpPreview(state.sharedMode);
     clearPreviewNavigation();
     clearPreviewPositions();
+    previousPreview = undefined;
     document.querySelector("#preview-page-status").hidden = true;
     detail.dataset.key = "";
     detail.dataset.sourceKey = "";
@@ -135,8 +170,12 @@ function renderDetail(state, getBytes) {
   const sourceKey = previewSourceKey(documentItem);
   if (state.mode === "content" && state.query.trim() && !state.settings.demoMode && !state.contentMatches
     && detail.dataset.sourceKey === sourceKey) return;
-  const evidenceQuery = state.contentMatches || (state.settings.demoMode && state.mode === "content") ? state.query : "";
-  const detailKey = JSON.stringify([documentItem.id, documentItem.modifiedTime, documentItem.sourceUrl, documentItem.page, documentItem.excerpt, documentItem.matchedPages, documentItem.source, state.localMode, state.settings.demoMode, state.mode, evidenceQuery, state.settings.pdfEditorUrl]);
+  const previous = previousPreview;
+  const retainedQuery = state.mode === 'content' && previous?.query === state.query && previous.item.id === documentItem.id
+    && (previous.item.libraryId || '') === (documentItem.libraryId || '') ? state.query : '';
+  const evidenceQuery = state.contentMatches || (state.settings.demoMode && state.mode === "content") ? state.query : retainedQuery;
+  previousPreview = { item: documentItem, query: evidenceQuery };
+  const detailKey = JSON.stringify([sourceKey, documentItem.id, documentItem.modifiedTime, documentItem.sourceUrl, documentItem.page, documentItem.excerpt, documentItem.matchedPages, documentItem.source, state.localMode, state.settings.demoMode, state.mode, evidenceQuery, state.settings.pdfEditorUrl]);
   if (detail.dataset.key === detailKey) return;
   detail.dataset.sourceKey = sourceKey;
   const isHwp = format === "hwp" || format === "hwpx";
@@ -147,6 +186,7 @@ function renderDetail(state, getBytes) {
   clearPdfPreview();
   clearHwpPreview();
   clearPreviewNavigation();
+  if (previous?.query === evidenceQuery) carryPreviewPosition(previous.item, documentItem, evidenceQuery);
   detail.scrollTop = 0;
   document.querySelector("#preview-page-status").hidden = true;
   detail.dataset.key = detailKey;
@@ -194,7 +234,7 @@ function renderConnection(state) {
       <p>추출 실패 ${stats.failures}개 · 텍스트 없는 문서 ${stats.textlessDocuments}개 · 텍스트 없는 쪽 ${stats.emptyPages}개</p>
       <ul>${state.documents.map((item) => {
         const count = stats.documentCounts?.[item.id];
-        const label = item.indexStatus === "error" ? "추출 실패 · 암호화와 파일 형식 확인"
+        const label = item.indexStatus === 'indexing' ? '본문 색인 준비 중 · 원문 열기 가능' : item.indexStatus === "error" ? "추출 실패 · 암호화와 파일 형식 확인"
           : count?.searchablePages ? `검색 가능 ${count.searchablePages}쪽${count.emptyPages ? ` · 텍스트 없는 ${count.emptyPages}쪽` : ""}` : "텍스트 없음 · 원문 열기 가능";
         return `<li><span>${escapeHtml(item.name)}</span><small>${label}</small></li>`;
       }).join("")}</ul><small>텍스트 없는 쪽은 본문 검색에서 제외됩니다.</small>`;
@@ -219,7 +259,8 @@ export function renderApp(state, getBytes) {
   document.querySelector("#sync-button").textContent = state.publicMode ? "게시 목록 새로고침" : "목록 새로고침";
   document.querySelector("#last-sync").textContent = formatDateTime(state.lastSync);
   document.querySelector("#search-mode").value = state.mode;
-  document.querySelector("#search-input").value = state.query;
+  const input = document.querySelector('#search-input');
+  if (input.dataset.composing !== 'true' && input.value !== state.query) input.value = state.query;
   document.querySelector("#search-input").placeholder = state.mode === "content" ? "학교 폭력, 학생 자치 · 쉼표로 AND 검색" : "문서 이름 · 쉼표로 AND 검색";
   document.querySelector("#search-submit").textContent = state.searching ? state.searchProgress || "검색 중" : "검색";
   document.querySelector("#search-submit").disabled = state.searching;
@@ -231,6 +272,10 @@ export function renderApp(state, getBytes) {
     : "최신 수정순";
   renderConnection(state);
   renderNotice(state);
+  const preparation = document.querySelector('#index-preparation');
+  preparation.hidden = !['loading', 'error'].includes(state.indexPreparation);
+  const preparationMarkup = state.indexPreparation === 'error' ? '본문 검색 자료 준비에 실패했습니다. <button type="button" class="secondary-button" data-index-retry>검색 자료 다시 준비</button>' : '본문 검색 자료 준비 중 · 파일명 검색과 원문 열기는 사용할 수 있습니다.';
+  if (preparation.innerHTML !== preparationMarkup) preparation.innerHTML = preparationMarkup;
   renderFolders(state);
   renderDocuments(state);
   renderDetail(state, getBytes);

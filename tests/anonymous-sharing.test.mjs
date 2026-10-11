@@ -24,6 +24,19 @@ async function setup(t) {
   return { app, host, guest, library, base, seed, create, open };
 }
 
+test('Cached anonymous originals revalidate scoped permissions and active link revocation', async t => {
+  const f = await setup(t); await f.seed('shared', ['alpha']); await f.seed('private', ['secret']);
+  const link = await f.create(); await f.open(link);
+  const base = `/api/public-links/${link.id}`;
+  const catalog = (await f.guest.request(base)).data;
+  const source = catalog.documents[0].sourceUrl;
+  assert.equal((await f.guest.request(source, { method: 'HEAD' })).status, 200);
+  assert.equal((await f.guest.request(`${base}/documents/private/original`, { method: 'HEAD' })).status, 404);
+  await f.host.request(`${f.base}/public-links/${link.id}`, { method: 'DELETE' });
+  assert.equal((await f.guest.request(source, { method: 'HEAD' })).status, 410);
+  assert.equal((await f.guest.request(`${base}/prepare`)).status, 410);
+});
+
 test('Anonymous link scopes catalog, AND search, occurrence evidence and originals without Google login', async (t) => {
   const f = await setup(t); await f.seed('shared', ['학생 자치 징계 학생 자치', '징계 처리']); await f.seed('private', ['secret private 학생 자치']);
   const link = await f.create(); const url = `/api/public-links/${link.id}`;
@@ -134,14 +147,14 @@ test('Anonymous exchange rate limits cannot be bypassed by forging ordinary sess
   assert.equal(response.status, 429); assert.equal(response.headers.get('retry-after'), '60');
 });
 
-test('Original concurrency is bounded and changed or oversized files never return stale bytes', async (t) => {
+test('Original concurrency is bounded and changed or oversized files never return stale bytes', { timeout: 20000 }, async (t) => {
   const f = await setup(t); await f.seed('shared', ['alpha']); const link = await f.create(); await f.open(link);
   const url = `/api/public-links/${link.id}/documents/shared/original`; const original = f.app.drive.bytes;
   let release; let began; let count = 0;
   const held = new Promise((resolve) => { release = resolve; }); const started = new Promise((resolve) => { began = resolve; });
-  f.app.drive.bytes = async (...args) => { if (++count === 4) began(); await held; return original(...args); };
+  f.app.drive.bytes = async (...args) => { if (++count === 2) began(); await held; return original(...args); };
   const reading = Array.from({ length: 4 }, () => f.guest.request(url));
-  try { await started; assert.equal((await f.guest.request(url)).status, 429); }
+  try { await started; await new Promise(resolve => setTimeout(resolve, 25)); assert.equal(count, 2, 'server downloads are capped at two'); assert.equal((await f.guest.request(url)).status, 429); }
   finally { release(); }
   assert.ok((await Promise.all(reading)).every((response) => response.status === 200));
   let releaseVersion; let beganVersion;

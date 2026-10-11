@@ -5,8 +5,11 @@ export function createSearchClient() {
   let sequence = 0;
   let currentEntries;
   let preparation;
+  let generation = 0;
+  let searchGeneration = 0;
   const pending = new Map();
   const reset = () => {
+    generation++; searchGeneration++;
     worker?.terminate();
     worker = undefined;
     currentEntries = undefined;
@@ -19,26 +22,33 @@ export function createSearchClient() {
     pending.set(id, { resolve, reject });
     worker.postMessage({ ...message, id });
   });
+  const prepare = entries => {
+    if (typeof Worker === 'undefined') return Promise.resolve();
+    if (currentEntries !== entries) {
+      reset(); currentEntries = entries;
+      worker = new Worker(new URL('./search-worker.js?v=phrase-map-2', import.meta.url), { type: 'module' });
+      const instance = worker;
+      worker.onmessage = ({ data }) => {
+        if (worker !== instance) return;
+        const request = pending.get(data.id); if (!request) return;
+        pending.delete(data.id);
+        if (data.error) request.reject(new Error(data.error)); else request.resolve(data.result);
+      };
+      worker.onerror = () => { if (worker === instance) reset(); };
+      preparation = send({ type: 'prepare', entries });
+    }
+    return preparation;
+  };
   return {
-    reset,
+    reset, prepare,
     async search(documents, entries, query) {
       if (typeof Worker === "undefined") return searchLocalIndex(documents, entries, query);
-      if (currentEntries !== entries) {
-        reset();
-        currentEntries = entries;
-        worker = new Worker(new URL("./search-worker.js?v=phrase-map-2", import.meta.url), { type: "module" });
-        worker.onmessage = ({ data }) => {
-          const request = pending.get(data.id);
-          if (!request) return;
-          pending.delete(data.id);
-          if (data.error) request.reject(new Error(data.error));
-          else request.resolve(data.result);
-        };
-        worker.onerror = reset;
-        preparation = send({ type: "prepare", entries });
-      }
-      await preparation;
-      return send({ type: "search", documents, query });
+      const ready = prepare(entries); const indexJob = generation; const searchJob = ++searchGeneration;
+      await ready;
+      if (indexJob !== generation || searchJob !== searchGeneration) throw new DOMException('지난 검색을 중단했습니다.', 'AbortError');
+      const result = await send({ type: 'search', documents, query });
+      if (indexJob !== generation || searchJob !== searchGeneration) throw new DOMException('지난 검색을 중단했습니다.', 'AbortError');
+      return result;
     }
   };
 }

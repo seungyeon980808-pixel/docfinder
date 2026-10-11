@@ -1,4 +1,4 @@
-import { previewSourceKey } from "./preview-cache.js?v=phrase-map-2";
+import { previewSourceKey } from "./preview-cache.js?v=responsiveness-1";
 
 const positions = new Map();
 const limit = 50;
@@ -7,6 +7,15 @@ const normalizeQuery = (query) => String(query || "").normalize("NFC").trim();
 const keyFor = (item) => JSON.stringify([item.libraryId || "", previewSourceKey(item)]);
 
 export function clearPreviewPositions() { positions.clear(); activeQuery = undefined; }
+
+// Only an automatic replacement of the same document may carry its reading position.
+// Ordinary file/query changes keep the existing reset behavior.
+export function carryPreviewPosition(previous, next, query) {
+  if (!previous || previous.id !== next.id || (previous.libraryId || '') !== (next.libraryId || '')
+    || activeQuery !== normalizeQuery(query) || keyFor(previous) === keyFor(next)) return;
+  const saved = positions.get(keyFor(previous));
+  if (saved) rememberPreviewPosition(next, query, saved);
+}
 
 export function initialPreviewPosition(item, query) {
   const normalized = normalizeQuery(query);

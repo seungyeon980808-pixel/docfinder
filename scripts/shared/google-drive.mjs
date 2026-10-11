@@ -106,6 +106,18 @@ export class SharedDrive {
     for await (const chunk of response.body) { size += chunk.length; if (size > this.maxFileBytes) { await response.body.cancel().catch(() => {}); deny(413, `파일은 ${this.maxFileBytes / 1024 / 1024}MB 이하로 준비하세요.`); } chunks.push(chunk); }
     return Buffer.concat(chunks);
   }
+  async check(libraryId, id) {
+    const document = (await this.db.query('SELECT metadata FROM df_documents WHERE library_id=$1 AND id=$2', [libraryId, id])).rows[0];
+    if (!document) deny(404, '문서를 찾을 수 없습니다.');
+    if (document.metadata.sourceFolderId) {
+      const source = (await this.db.query('SELECT * FROM df_folder_sources WHERE library_id=$1', [libraryId])).rows[0];
+      if (!source || source.status !== 'ready' || source.folder_id !== document.metadata.sourceFolderId) deny(409, '연결한 Drive 폴더의 접근 권한을 확인하세요.');
+      return { ...await this.folderReader.document(source.folder_id, id), sourceFolderId: source.folder_id, relativePath: document.metadata.relativePath };
+    }
+    const metadata = await (await this.request(await this.token(libraryId), `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=${encodeURIComponent(fields + ',trashed')}`)).json();
+    if (metadata.trashed) deny(404, 'Drive 원문이 삭제되었습니다.');
+    return metadata;
+  }
   async upload(libraryId, upload, filename) {
     const token = await this.token(libraryId);
     // Recover an upload completed in Drive before the server response was saved.

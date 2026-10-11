@@ -12,6 +12,7 @@ export async function sharedFixture(port = 0, automatic = false, options = {}) {
   const drive = { authUrl: () => 'https://accounts.google.com/', async files(id) { return [...files.values()].filter((file) => file.libraryId === id).map((file) => file.metadata); },
     async trash(id, documentId) { if (files.get(documentId)?.libraryId !== id) throw new Error('Not found'); files.delete(documentId); },
     async bytes(id, documentId) { const file = files.get(documentId); if (!file || file.libraryId !== id) throw new Error('Not found'); return file.bytes; },
+    async check(id, documentId) { const file = files.get(documentId); if (!file || file.libraryId !== id) throw new Error('Not found'); return file.metadata; },
     async upload(id, row, filename) {
       const prior = [...files.values()].find((item) => item.libraryId === id && item.metadata.appProperties.docfinderUpload === row.id);
       if (prior) return prior.metadata;
@@ -37,7 +38,7 @@ export async function sharedFixture(port = 0, automatic = false, options = {}) {
       const response = await fetch(`${origin}${url}`, { method, headers: { Cookie: cookie, ...(method !== 'GET' ? { Origin: origin, 'X-CSRF-Token': csrf } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers }, body: raw || (body !== undefined ? JSON.stringify(body) : undefined) });
       if (response.headers.get('set-cookie')) cookie = response.headers.get('set-cookie').split(';')[0];
       const type = response.headers.get('content-type') || '';
-      const data = type.includes('json') ? await response.json() : Buffer.from(await response.arrayBuffer());
+      const data = method !== 'HEAD' && type.includes('json') ? await response.json() : Buffer.from(await response.arrayBuffer());
       if (data.csrf) csrf = data.csrf;
       return { status: response.status, data, headers: response.headers };
     }

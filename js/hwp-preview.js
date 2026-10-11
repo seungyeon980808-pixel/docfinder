@@ -3,7 +3,7 @@ import { hwpPageHighlights } from "./hwp-highlights.js?v=phrase-map-2";
 import { decorateMatch } from "./search-matches.js?v=phrase-map-2";
 import { clearPreviewNavigation, createPreviewNavigation, focusPageMatch } from "./preview-navigation.js?v=navigation-focus-1";
 import { capturePageAnchor, restorePageAnchor, trackPreviewViewport, stopPreviewViewport } from "./preview-viewport.js?v=navigation-focus-1";
-import { previewSourceKey } from "./preview-cache.js?v=phrase-map-2";
+import { previewSourceKey } from "./preview-cache.js?v=responsiveness-1";
 import { createRenderScheduler } from "./preview-scheduler.js?v=phrase-map-2";
 import { createHwpRenderer, destroyHwpRenderer } from "./hwp-renderer.js?v=phrase-map-2";
 
@@ -13,6 +13,7 @@ export function clearHwpPreview(release = false) {
   if (release) destroyHwpRenderer();
   const session = activeSession;
   if (!session) return;
+  session.abort.abort();
   activeSession = undefined;
   session.scheduler.clear();
   session.observer?.disconnect();
@@ -32,7 +33,11 @@ export function updateHwpPreview(item, query) {
   session.navigation = createPreviewNavigation(item, query);
   session.navigation.bind((page, index) => { session.restoreAnchor = null; session.goToPage(page, index); });
   for (const [node, record] of session.rendered) applyHighlights(session, node, record);
-  session.goToPage(position.page, position.matchIndex);
+  session.goToPage(position.anchor?.page || position.page, position.matchIndex);
+  if (position.anchor) {
+    session.pending = null; session.restoreAnchor = null;
+    restorePageAnchor(session.scrollRoot, session.pages, position.anchor); session.updateViewport();
+  }
   return true;
 }
 
@@ -44,10 +49,10 @@ export async function renderHwpPreview(viewer, item, getBytes, query = "") {
   const position = initialPreviewPosition(item, query);
   const session = { viewer, scrollRoot, status, query, item, restoreAnchor: position.anchor, key: previewSourceKey(item),
     navigation: createPreviewNavigation(item, query), scheduler: createRenderScheduler(1),
-    rendered: new Map(), visible: new Set(), startedAt: performance.now() };
+    abort: new AbortController(), rendered: new Map(), visible: new Set(), startedAt: performance.now() };
   activeSession = session;
   try {
-    const bytes = await getBytes(item);
+    const bytes = await getBytes(item, { signal: session.abort.signal });
     if (activeSession !== session) return;
     session.renderer = await createHwpRenderer(bytes, session.key);
     if (activeSession !== session) return;
@@ -74,7 +79,11 @@ export async function renderHwpPreview(viewer, item, getBytes, query = "") {
     };
     session.navigation.bind((page, index) => { session.restoreAnchor = null; session.goToPage(page, index); });
     // Start the selected match first; nearby pages can follow after it.
-    session.goToPage(Math.max(1, Math.min(position.page, pageCount)), position.matchIndex);
+    session.goToPage(Math.max(1, Math.min(position.anchor?.page || position.page, pageCount)), position.matchIndex);
+    if (position.anchor) {
+      session.pending = null; session.restoreAnchor = null;
+      restorePageAnchor(scrollRoot, session.pages, position.anchor); session.updateViewport();
+    }
     session.observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) { session.visible.add(entry.target); queuePage(session, entry.target); }
@@ -94,7 +103,7 @@ export async function renderHwpPreview(viewer, item, getBytes, query = "") {
   } catch (error) {
     if (activeSession === session) {
       console.warn("DocFinder HWP preview failed", error);
-      viewer.innerHTML = '<p class="preview-error">한글 원문을 표시하지 못했습니다. 파일 작업 메뉴에서 원문을 열어 확인하세요.</p>';
+      viewer.innerHTML = '<p class="preview-error" role="status">한글 원문을 표시하지 못했습니다. 연결을 확인한 뒤 <button type="button" class="secondary-button" data-preview-retry>원문 다시 시도</button></p>';
       status.hidden = true;
       clearPreviewNavigation();
     }
@@ -180,7 +189,7 @@ function queuePage(session, node, priority = 10) {
       applyHighlights(session, node, record);
       trimPages(session);
     } catch (error) {
-      if (activeSession === session) { console.warn("DocFinder HWP page failed", error); node.textContent = `${node.dataset.pageNumber}쪽을 렌더링하지 못했습니다.`; }
+      if (activeSession === session) { console.warn("DocFinder HWP page failed", error); node.innerHTML = `<p class="preview-error" role="status">${node.dataset.pageNumber}쪽을 표시하지 못했습니다. <button type="button" data-preview-retry>원문 다시 시도</button></p>`; }
     }
   }, priority).catch(() => {});
 }

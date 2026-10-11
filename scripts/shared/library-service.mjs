@@ -2,12 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { opaque, emailAddress, deny, digest } from './security.mjs';
 import { driveFolderId } from './folder-reader.mjs';
 import { documentFormat, filterDocuments } from '../../js/search.js';
-import { searchLocalIndex } from '../../js/local-index.js';
+import { searchLocalIndex, prepareLocalIndex } from '../../js/local-index.js';
 import { summarizeIndex } from '../../js/index-health.js';
+import { createRenderScheduler } from '../../js/preview-scheduler.js';
+import { sharedDocuments, pageCountsSql, metadataStats } from './catalog-metadata.mjs';
 
 export const fileVersion = (file) => JSON.stringify([file.modifiedTime, String(file.size), file.md5Checksum || '', file.sourceFolderId || '', file.name, file.relativePath || '']);
 export class LibraryService {
-  constructor(db, drive, maxFileBytes = 128 * 1024 * 1024) { this.db = db; this.drive = drive; this.maxFileBytes = maxFileBytes; this.cache = new Map(); }
+  constructor(db, drive, maxFileBytes = 128 * 1024 * 1024) { this.db = db; this.drive = drive; this.maxFileBytes = maxFileBytes; this.cache = new Map(); this.manifests = new Map(); this.preparation = createRenderScheduler(1); }
   async register(user) {
     return this.db.transaction(async (tx) => {
       await tx.query(`INSERT INTO df_users(id,email,name) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET email=excluded.email,name=excluded.name`, [user.id, user.email, user.name]);
@@ -75,36 +77,58 @@ export class LibraryService {
       if (binding !== current) deny(409, '폴더 연결이 바뀌었습니다. 목록을 다시 갱신합니다.');
       for (const file of files) await this.upsertFile(libraryId, file, tx);
       const ids = files.filter((file) => documentFormat(file.name, file.mimeType) && Number(file.size) <= this.maxFileBytes).map((file) => file.id);
-      await tx.query(`DELETE FROM df_documents WHERE library_id=$1 AND NOT(id=ANY($2::text[])) AND COALESCE(metadata->>'createdTime', '1970-01-01T00:00:00Z')<$3`, [libraryId, ids, startedAt]);
+      const removed = await tx.query(`DELETE FROM df_documents WHERE library_id=$1 AND NOT(id=ANY($2::text[])) AND COALESCE(metadata->>'createdTime', '1970-01-01T00:00:00Z')<$3`, [libraryId, ids, startedAt]);
+      if (removed.rowCount) this.cache.delete(libraryId);
       await tx.query('UPDATE df_connections SET synced_at=now() WHERE library_id=$1', [libraryId]);
       await tx.query('UPDATE df_folder_sources SET synced_at=now() WHERE library_id=$1', [libraryId]);
     });
-    this.cache.delete(libraryId);
+  }
+  async metadata(user, id) {
+    const library = await this.permission(user, id);
+    const rows = (await this.db.query('SELECT id,metadata,version,status FROM df_documents WHERE library_id=$1 ORDER BY id', [id])).rows;
+    await this.permission(user, id);
+    const signature = digest(JSON.stringify(rows.map(row => [row.id, row.version, row.status])));
+    return { library, rows, signature, documents: sharedDocuments(rows, id) };
   }
   async corpus(user, id) {
-    const library = await this.permission(user, id);
-    let rows = (await this.db.query('SELECT id,metadata,version,status FROM df_documents WHERE library_id=$1 ORDER BY id', [id])).rows;
-    let signature = JSON.stringify(rows.map((row) => [row.id, row.version, row.status]));
+    const { library, signature } = await this.metadata(user, id);
     let cached = this.cache.get(id);
     if (cached?.signature !== signature) {
-      rows = (await this.db.query('SELECT * FROM df_documents WHERE library_id=$1 ORDER BY id', [id])).rows;
-      signature = JSON.stringify(rows.map((row) => [row.id, row.version, row.status]));
-      const documents = rows.map((row) => ({ ...row.metadata, id: row.id, libraryId: id, source: 'shared', folder: row.metadata.sourceFolderId ? '연결 폴더' : '문서함', path: row.metadata.relativePath || row.metadata.name,
-        sha256: row.version, version: row.version, indexStatus: row.status, excerpt: '', heading: '원문',
-        sourceUrl: `/api/libraries/${encodeURIComponent(id)}/documents/${encodeURIComponent(row.id)}/original?version=${encodeURIComponent(row.version)}` }));
-      const entries = rows.flatMap((row) => row.pages.map((page) => ({ ...page, id: row.id })));
-      cached = { signature, documents, entries, stats: summarizeIndex(documents, entries) };
-      this.cache.delete(id); this.cache.set(id, cached);
-      while (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value);
+      cached = await this.preparation.schedule(`${id}:${signature}`, async () => {
+        if (this.cache.get(id)?.signature === signature) return this.cache.get(id);
+        const rows = (await this.db.query('SELECT * FROM df_documents WHERE library_id=$1 ORDER BY id', [id])).rows;
+        if (digest(JSON.stringify(rows.map(row => [row.id, row.version, row.status]))) !== signature) deny(409, '검색 자료가 갱신되었습니다. 다시 검색하세요.');
+        const documents = sharedDocuments(rows, id);
+        const entries = rows.flatMap(row => row.pages.map(page => ({ ...page, id: row.id })));
+        await prepareLocalIndex(entries, () => new Promise(resolve => setImmediate(resolve)));
+        if ((await this.metadata(user, id)).signature !== signature) deny(409, '검색 자료가 갱신되었습니다. 다시 검색하세요.');
+        const value = { signature, documents, entries, stats: summarizeIndex(documents, entries) };
+        this.cache.delete(id); this.cache.set(id, value);
+        while (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value);
+        return value;
+      }, 0);
     }
-    const connection = (await this.db.query('SELECT status,synced_at FROM df_connections WHERE library_id=$1', [id])).rows[0];
-    const folderSource = (await this.db.query('SELECT folder_id,name,status,synced_at,last_error FROM df_folder_sources WHERE library_id=$1', [id])).rows[0];
-    return { ...cached, library, connection, folderSource };
+    await this.permission(user, id);
+    return { ...cached, library };
   }
   async catalog(user, id) {
-    const corpus = await this.corpus(user, id);
-    return { library: { id, name: corpus.library.name, role: corpus.library.role, share_id: corpus.library.share_id }, documents: corpus.documents,
-      stats: corpus.stats, revision: corpus.signature, driveConnected: corpus.connection?.status === 'ready', folderSource: corpus.folderSource, lastSync: corpus.folderSource?.synced_at || corpus.connection?.synced_at };
+    const manifest = await this.metadata(user, id);
+    let stats = this.manifests.get(id);
+    if (stats?.signature !== manifest.signature) {
+      const rows = (await this.db.query(`SELECT d.id,${pageCountsSql} FROM df_documents d WHERE library_id=$1 ORDER BY id`, [id])).rows;
+      stats = { signature: manifest.signature, value: metadataStats(manifest.documents, rows) };
+      this.manifests.delete(id); this.manifests.set(id, stats);
+      while (this.manifests.size > 8) this.manifests.delete(this.manifests.keys().next().value);
+    }
+    const [connections, sources] = await Promise.all([
+      this.db.query('SELECT status,synced_at FROM df_connections WHERE library_id=$1', [id]),
+      this.db.query('SELECT folder_id,name,status,synced_at,last_error FROM df_folder_sources WHERE library_id=$1', [id])
+    ]);
+    const connection = connections.rows[0]; const folderSource = sources.rows[0];
+    await this.permission(user, id);
+    return { library: { id, name: manifest.library.name, role: manifest.library.role, share_id: manifest.library.share_id }, documents: manifest.documents,
+      stats: stats.value, revision: manifest.signature, indexReady: this.cache.get(id)?.signature === manifest.signature,
+      driveConnected: connection?.status === 'ready', folderSource, lastSync: folderSource?.synced_at || connection?.synced_at };
   }
   async folderSettings(user, id) {
     await this.permission(user, id, true);
@@ -155,12 +179,13 @@ export class LibraryService {
   }
   async search(user, id, query, mode) {
     if (query.length > 500) deny(400, '검색어는 500자 이내로 입력하세요.');
+    if (mode === 'name') return filterDocuments((await this.metadata(user, id)).documents, { query, folder: '전체', mode });
     const corpus = await this.corpus(user, id);
     return mode === 'name' ? filterDocuments(corpus.documents, { query, folder: '전체', mode }) : searchLocalIndex(corpus.documents, corpus.entries, query);
   }
   async document(user, id, documentId) {
     await this.permission(user, id);
-    const row = (await this.db.query('SELECT * FROM df_documents WHERE library_id=$1 AND id=$2', [id, documentId])).rows[0];
+    const row = (await this.db.query('SELECT id,library_id,metadata,version,status FROM df_documents WHERE library_id=$1 AND id=$2', [id, documentId])).rows[0];
     if (!row) deny(404, '문서를 찾을 수 없습니다.');
     return row;
   }

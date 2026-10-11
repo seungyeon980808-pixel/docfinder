@@ -78,7 +78,7 @@ export class FolderReader {
     }
     return files;
   }
-  async bytes(root, id, limit = this.maxFileBytes) {
+  async document(root, id, limit = this.maxFileBytes) {
     await this.folder(root);
     const item = await this.metadata(id);
     if (item.trashed || Number(item.size) > limit) deny(404, '원문을 열 수 없습니다.');
@@ -90,6 +90,10 @@ export class FolderReader {
       parents = next;
     }
     if (!inside) deny(403, '이 문서는 연결한 폴더 밖으로 이동했습니다. 목록을 갱신하세요.');
+    return item;
+  }
+  async bytes(root, id, limit = this.maxFileBytes) {
+    await this.document(root, id, limit);
     return this.request(id, { alt: 'media' }, limit);
   }
 }

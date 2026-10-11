@@ -1,6 +1,8 @@
 import { escapeHtml } from './search-matches.js';
 import { createGuestLibrary } from './guest-library.js';
 import { createPublicSharing } from './public-sharing.js';
+import { createByteCache } from './preview-cache.js?v=responsiveness-1';
+import { createIndexPreparation } from './background-index.js';
 
 export function createSharedLibrary({ onChange, notify }) {
   const publicId = /^\/p\/([a-f0-9]{64})$/u.exec(location.pathname)?.[1];
@@ -8,15 +10,34 @@ export function createSharedLibrary({ onChange, notify }) {
   let session; let libraries = []; let library; let catalog; let pending; let accessError = '';
   let generation = 0; let abort = new AbortController(); let polling = false; let busy = false; let progress = '';
   const uploads = new Map();
+  let searchAbort;
+  const preparation = createIndexPreparation({ request: signal => request(`/api/libraries/${library.id}/prepare`, { signal }),
+    isCurrent: revision => catalog?.revision === revision, onChange: () => emit() });
+  const originalBytes = createByteCache(async (item, { signal }) => {
+    const response = await fetchOriginal(item, 'GET', signal);
+    return response.arrayBuffer();
+  }, 48 * 1024 * 1024, { validate: (item, { signal }) => fetchOriginal(item, 'HEAD', signal) });
+  async function fetchOriginal(item, method, signal) {
+    if (item.libraryId !== library?.id) throw new DOMException('문서함을 다시 선택하세요.', 'AbortError');
+    const response = await fetch(item.sourceUrl, { method, credentials: 'same-origin', cache: 'no-store', signal: signal ? AbortSignal.any([signal, abort.signal]) : abort.signal });
+    if (!response.ok) {
+      if ([401, 403, 404, 409].includes(response.status)) { originalBytes.clear(); await refresh(); }
+      throw new Error('원문을 불러오지 못했습니다. 권한과 연결을 확인한 뒤 다시 시도하세요.');
+    }
+    return response;
+  }
   const shareId = /^\/s\/([a-f0-9]{64})$/u.exec(location.pathname)?.[1];
   const publicSharing = createPublicSharing({ request, notify, context: () => ({ library, catalog, generation }) });
   function snapshot() { return { sharedUser: session?.user, sharedConfigured: session?.configured, sharedLibraries: libraries, sharedLibrary: library,
     sharedPending: pending, sharedAccessError: accessError, documents: catalog?.documents || [], indexStats: catalog?.stats,
+    indexPreparation: preparation.status === 'ready' && catalog?.documents.some(item => item.indexStatus === 'indexing') ? 'loading' : preparation.status,
     sourceName: library?.name || '공유 문서함', libraryId: library?.id || '', lastSync: catalog?.lastSync,
     driveConnected: Boolean(catalog?.driveConnected), sharedFolderSource: catalog?.folderSource, personalBusy: busy, personalProgress: progress,
     connection: accessError || catalog?.stats?.failures || catalog?.folderSource?.status === 'error' ? 'error' : busy ? 'indexing' : catalog?.driveConnected || catalog?.folderSource?.status === 'ready' ? 'connected' : 'idle' }; }
   const emit = () => onChange(snapshot());
   function clear() {
+    preparation.reset();
+    originalBytes.clear(); searchAbort?.abort();
     generation++; abort.abort(); abort = new AbortController(); library = undefined; catalog = undefined; pending = undefined; accessError = ''; busy = false; progress = '';
     document.querySelector('#sharing-dialog').close(); document.querySelector('#sharing-members').replaceChildren(); document.querySelector('#sharing-link').value = ''; document.querySelector('#invite-email').value = ''; emit();
     publicSharing.reset();
@@ -34,6 +55,7 @@ export function createSharedLibrary({ onChange, notify }) {
     clear(); const job = generation; library = item; pending = item?.status === 'pending' ? item : undefined; emit();
     if (!item || pending) return;
     try { const next = await request(`/api/libraries/${item.id}`); if (job !== generation) return; catalog = next; library = { ...item, ...next.library }; emit();
+      void preparation.prepare(next.revision, next.indexReady);
       if (updateUrl) history.replaceState(null, '', `/s/${item.share_id}`);
     } catch (error) { if (job !== generation || error.name === 'AbortError') return; catalog = undefined; accessError = error.message; emit(); }
   }
@@ -48,7 +70,7 @@ export function createSharedLibrary({ onChange, notify }) {
     if (!session?.user || !library || pending || polling || busy) return;
     polling = true; const id = library.id; const job = generation;
     try {
-      const latestSession = await request('/api/session');
+      const [latestSession, next] = await Promise.all([request('/api/session'), request(`/api/libraries/${id}`)]);
       if (job !== generation) return;
       if (latestSession.user?.id !== session.user?.id) {
         session = latestSession; libraries = []; clear();
@@ -56,12 +78,13 @@ export function createSharedLibrary({ onChange, notify }) {
         return;
       }
       session = latestSession;
-      const next = await request(`/api/libraries/${id}`);
       if (job !== generation) return;
-      const changed = next.revision !== catalog?.revision || next.driveConnected !== catalog?.driveConnected || JSON.stringify(next.folderSource) !== JSON.stringify(catalog?.folderSource);
-      catalog = next; if (changed) emit();
+      const changed = accessError || next.revision !== catalog?.revision || next.driveConnected !== catalog?.driveConnected || JSON.stringify(next.folderSource) !== JSON.stringify(catalog?.folderSource);
+      catalog = next; accessError = ''; if (changed) emit();
+      void preparation.prepare(next.revision, next.indexReady);
     } catch (error) {
       if (job !== generation || error.name === 'AbortError') return;
+      if (![401, 403, 404, 410].includes(error.status)) { accessError = '목록 갱신에 실패했습니다. 현재 문서를 유지합니다. 목록 새로고침으로 다시 시도하세요.'; emit(); return; }
       clear(); accessError = error.status === 401 ? '로그인이 만료되었습니다. 다시 로그인하세요.' : error.message;
       if (error.status === 401) session.user = null;
       document.querySelector('#sharing-dialog')?.close(); document.querySelector('#sharing-members').replaceChildren(); emit();
@@ -80,7 +103,7 @@ export function createSharedLibrary({ onChange, notify }) {
         ? 'Drive 연결은 완료됐습니다. 목록 갱신은 자동으로 다시 시도합니다.' : reasons[connectionResult.get('drive_reason')] || 'Drive 연결을 완료하지 못했습니다. 연결을 다시 시도하세요.');
       history.replaceState(null, '', location.pathname);
     }
-    setInterval(() => { if (!document.hidden) refresh(); }, 3000);
+    setInterval(() => { if (!document.hidden) refresh(); }, 15000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     document.querySelector('#library-picker').addEventListener('change', (event) => choose(libraries.find((item) => item.id === event.target.value), true));
     document.querySelector('#accept-invite-button').addEventListener('click', async () => {
@@ -178,13 +201,15 @@ export function createSharedLibrary({ onChange, notify }) {
   }, async disconnect() {
     await request(`/api/libraries/${library.id}/drive`, { method: 'DELETE' }); await refresh();
   }, async sync() { if (library?.role === 'owner') await request(`/api/libraries/${library.id}/sync`, { method: 'POST', body: {} }); await refresh(); },
-  async search(query, mode) { if (!library || pending) return []; return (await request(`/api/libraries/${library.id}/search?${new URLSearchParams({ q: query, mode })}`)).documents; },
-  async getBytes(item) {
-    if (item.libraryId !== library?.id) throw new Error('문서함을 다시 선택하세요.');
-    const response = await fetch(item.sourceUrl, { credentials: 'same-origin', cache: 'no-store', signal: abort.signal });
-    if (!response.ok) { if ([401, 403].includes(response.status)) await refresh(); throw new Error('문서를 열 수 없습니다. 권한과 Drive 연결을 확인하세요.'); }
-    return response.arrayBuffer();
-  }, async retry(item) { await request(`/api/libraries/${library.id}/documents/${item.id}/retry`, { method: 'POST', body: {} }); await refresh(); },
+  cancelSearch() { searchAbort?.abort(); },
+  prepareSearch() { return preparation.prepare(catalog?.revision, false, true); },
+  async search(query, mode) {
+    if (!library || pending) return [];
+    searchAbort?.abort(); searchAbort = new AbortController();
+    return (await request(`/api/libraries/${library.id}/search?${new URLSearchParams({ q: query, mode })}`, { signal: AbortSignal.any([searchAbort.signal, abort.signal]) })).documents;
+  },
+  getBytes: originalBytes,
+  async retry(item) { await request(`/api/libraries/${library.id}/documents/${item.id}/retry`, { method: 'POST', body: {} }); await refresh(); },
   async trash(item) { await request(`/api/libraries/${library.id}/documents/${item.id}`, { method: 'DELETE' }); await refresh(); },
   async upload(files) {
     if (busy || library?.role !== 'owner') return;

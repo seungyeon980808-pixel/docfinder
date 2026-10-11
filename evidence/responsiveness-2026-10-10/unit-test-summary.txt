@@ -1,0 +1,10 @@
+✔ Expired worker lease is recovered and stale version cannot replace current pages (511.920875ms)
+✔ Graceful shutdown waits for the active indexing job despite later timer ticks (510.872792ms)
+ℹ tests 197
+ℹ suites 0
+ℹ pass 197
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10124.894541

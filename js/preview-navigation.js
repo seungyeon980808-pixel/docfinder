@@ -50,7 +50,11 @@ export function createPreviewNavigation(documentItem, query) {
   const map = document.querySelector("#preview-map");
   const matches = query.trim() ? matchingPages(documentItem).map((entry) => ({ ...entry })) : [];
   const initial = initialPreviewPosition(documentItem, query);
-  if (!host || !matches.length) { clearPreviewNavigation(); return { setPage() {}, setMatch() {}, setMatches() {}, bind() {}, note() {} }; }
+  if (!host || !matches.length) {
+    clearPreviewNavigation();
+    return { setPage() {}, setMatch() {}, setMatches() {}, bind() {}, note() {},
+      ...(query.trim() ? { selection: () => ({ page: initial.page, matchIndex: initial.matchIndex, termIndex: initial.termIndex }) } : {}) };
+  }
   const terms = parseSearchTerms(query);
   let locations = matchingLocations(matches);
   let termIndex = initial.termIndex >= 0 && initial.termIndex < terms.length ? initial.termIndex : -1;

@@ -125,6 +125,7 @@ html[data-profile="local"] .result-menu-panel button[data-row-action="edit"] { d
 .source-page img { height: 100%; object-fit: contain; }
 .preview-loading, .preview-error { margin: 0; padding: var(--space-4); color: var(--muted-strong); font-size: var(--text-sm); text-align: center; background: var(--white); }
 .preview-error { color: var(--danger); }
+.page-preparation { position: absolute; inset: auto var(--space-2) var(--space-2) auto; padding: var(--space-1) var(--space-2); color: var(--muted-strong); background: var(--white); font-size: var(--text-xs); pointer-events: none; }
 .hwp-render-host { position: fixed; left: -10000px; top: 0; width: var(--hwp-render-width); height: var(--hwp-render-width); visibility: hidden; pointer-events: none; }
 .settings-dialog { width: min(var(--settings-dialog-width), calc(100% - var(--space-8))); max-height: calc(100dvh - var(--space-8)); padding: 0; color: var(--ink); background: var(--white); border: var(--border-thin) solid var(--line-dark); border-radius: var(--radius-dialog); box-shadow: var(--shadow-dialog); }
 .settings-dialog::backdrop { background: var(--backdrop); }

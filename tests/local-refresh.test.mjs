@@ -19,6 +19,11 @@ test("automatic catalog refresh retains the selected search result until fresh s
     searchClient: { reset() {} },
     localIndexPromise: undefined,
     localRevision: "old-revision",
+    localCatalogGeneration: 0,
+    searchSequence: 0,
+    afterPaint: async () => {},
+    prepareWhenIdle: async () => {},
+    updateView: (patch) => { state = { ...state, ...patch }; },
     deepLinkedId: "",
     localProfile: true
   });

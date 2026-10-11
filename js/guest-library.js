@@ -1,10 +1,27 @@
+import { createByteCache } from './preview-cache.js?v=responsiveness-1';
+import { createIndexPreparation } from './background-index.js';
 export function createGuestLibrary({ id, onChange }) {
   let catalog; let accessError = ''; let polling = false;
+  let searchAbort;
+  const preparation = createIndexPreparation({ request: signal => request('/prepare', { signal }),
+    isCurrent: revision => catalog?.revision === revision, onChange: () => emit() });
+  const originalBytes = createByteCache(async (item, { signal }) => (await original(item, 'GET', signal)).arrayBuffer(), 48 * 1024 * 1024,
+    { validate: (item, { signal }) => original(item, 'HEAD', signal) });
+  async function original(item, method, signal) {
+    if (item.libraryId !== id || !catalog) throw new Error('공유 링크를 다시 열어 주세요.');
+    const response = await fetch(item.sourceUrl, { method, credentials: 'same-origin', cache: 'no-store', signal });
+    if (!response.ok) {
+      if ([401, 403, 404, 409, 410].includes(response.status)) { originalBytes.clear(); await refresh(); }
+      throw new Error('원문을 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.');
+    }
+    return response;
+  }
   const secret = new URLSearchParams(location.hash.slice(1)).get('k');
   const base = `/api/public-links/${id}`;
   function emit() {
     onChange({ sharedGuest: true, sharedUser: null, sharedLibraries: [], sharedLibrary: catalog?.library,
       sharedAccessError: accessError, sharedPending: null, documents: catalog?.documents || [], indexStats: catalog?.stats,
+      indexPreparation: preparation.status === 'ready' && catalog?.documents.some(item => item.indexStatus === 'indexing') ? 'loading' : preparation.status,
       sourceName: catalog?.library.name || '공유 자료', libraryId: id, driveConnected: false, sharedFolderSource: null,
       personalBusy: false, personalProgress: '', connection: accessError ? 'error' : catalog ? 'connected' : 'idle' });
   }
@@ -26,7 +43,11 @@ export function createGuestLibrary({ id, onChange }) {
       catch (error) { if (error.status !== 401 || !secret) throw error; await authorize(); next = await request(); }
       const changed = next.revision !== catalog?.revision || accessError || !catalog;
       catalog = next; accessError = ''; if (changed) emit();
-    } catch (error) { catalog = undefined; accessError = error.message; emit(); }
+      void preparation.prepare(next.revision, next.indexReady);
+    } catch (error) {
+      if ([401, 403, 404, 410].includes(error.status)) { originalBytes.clear(); searchAbort?.abort(); preparation.reset(); catalog = undefined; }
+      accessError = error.message; emit();
+    }
     finally { polling = false; }
   }
   return {
@@ -37,19 +58,13 @@ export function createGuestLibrary({ id, onChange }) {
       setInterval(() => { if (!document.hidden) refresh(); }, 15000);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     }, refresh, sync: refresh,
+    cancelSearch() { searchAbort?.abort(); },
+    prepareSearch() { return preparation.prepare(catalog?.revision, false, true); },
     async search(query, mode) {
       if (!catalog) return [];
-      return (await request(`/search?${new URLSearchParams({ q: query, mode })}`)).documents;
+      searchAbort?.abort(); searchAbort = new AbortController();
+      return (await request(`/search?${new URLSearchParams({ q: query, mode })}`, { signal: searchAbort.signal })).documents;
     },
-    async getBytes(item) {
-      if (item.libraryId !== id || !catalog) throw new Error('공유 링크를 다시 열어 주세요.');
-      const response = await fetch(item.sourceUrl, { credentials: 'same-origin', cache: 'no-store' });
-      if (!response.ok) {
-        const value = await response.json().catch(() => ({}));
-        if ([401, 403, 404, 410].includes(response.status)) await refresh();
-        throw new Error(value.error || '원문을 불러오지 못했습니다. 잠시 뒤 다시 시도하세요.');
-      }
-      return response.arrayBuffer();
-    }
+    getBytes: originalBytes
   };
 }
