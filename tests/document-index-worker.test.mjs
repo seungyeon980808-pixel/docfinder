@@ -1,3 +1,4 @@
+import { readHwpPageText } from "../js/hwp-page-text.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -8,7 +9,7 @@ async function harness({ pdf, hwp }) {
   const source = await readFile(new URL("../js/document-index-worker.js", import.meta.url), "utf8");
   const context = vm.createContext({ URL, Uint8Array, Worker: class { terminate() {} }, mockPdf: pdf, mockHwp: hwp,
     self: { postMessage: (message) => messages.push(message) },
-    readPdfTextContent: async (page) => page.content });
+    readHwpPageText, readPdfTextContent: async (page) => page.content });
   const prepared = source.replace(/^import .*;$/gmu, "")
     .replaceAll("import.meta.url", '"https://fixture.test/js/worker.js"')
     .replace(/^const assets =.*;$/mu, 'const assets = "https://fixture.test/vendor/";')
@@ -40,7 +41,7 @@ test("한글 파싱 실패 뒤에도 자원을 해제하고 다음 문서 색인
   const worker = await harness({ hwp: { HwpDocument: class {
     constructor() { this.number = ++created; }
     pageCount() { return 1; }
-    getPageText() { return this.number === 1 ? "malformed" : JSON.stringify("학교 폭력 학생 자치"); }
+    getPageTextLayout() { return this.number === 1 ? "malformed" : JSON.stringify({ runs: [{ text: "학교 폭력 학생 자치", separator: "" }] }); }
     free() { freed++; }
   } } });
   await Promise.all([worker.call(1, "hwp"), worker.call(2, "hwpx")]);

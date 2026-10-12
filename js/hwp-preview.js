@@ -153,6 +153,12 @@ function applyHighlights(session, node, record) {
   let highlights;
   try { highlights = hwpPageHighlights(record.svg, record.layout, session.query); } catch { /* Indexed excerpt remains available. */ }
   if (!highlights) return;
+  const indexed = session.item.matchedPages?.find(entry => entry.page === Number(node.dataset.pageNumber));
+  if (indexed?.ranges?.length && (indexed.ranges.length !== highlights.matches.length
+    || indexed.ranges.some((range, index) => range.termIndex !== highlights.matches[index]?.termIndex))) {
+    session.navigation.note(Number(node.dataset.pageNumber), "원문 텍스트가 색인과 다릅니다. 색인 갱신 후 원문 강조를 확인할 수 있습니다.");
+    return;
+  }
   const overlay = document.createElement("div");
   overlay.className = "source-overlay";
   overlay.setAttribute("aria-hidden", "true");

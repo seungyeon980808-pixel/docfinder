@@ -1,3 +1,4 @@
+import { corpusRevision } from "./catalog-metadata.mjs";
 import { opaque, digest, equal, encrypt, decrypt, deny } from './security.mjs';
 import { filterDocuments } from '../../js/search.js';
 import { searchLocalIndex, prepareLocalIndex } from '../../js/local-index.js';
@@ -97,17 +98,17 @@ export class PublicLinks {
   }
   async corpus(id, token) {
     const link = await this.permission(id, token);
-    const rows = await this.rows(link); const revision = digest(JSON.stringify(rows.map((row) => [row.id, row.version, row.status])));
+    const rows = await this.rows(link); const revision = corpusRevision(rows);
     let cached = this.cache.get(id);
     if (cached?.revision !== revision) {
       cached = await this.preparation.schedule(`${id}:${revision}`, async () => {
         const rows = await this.rows(link, true);
-        if (digest(JSON.stringify(rows.map(row => [row.id, row.version, row.status]))) !== revision) deny(409, '공유 자료가 갱신되었습니다. 다시 검색하세요.');
+        if (corpusRevision(rows) !== revision) deny(409, '공유 자료가 갱신되었습니다. 다시 검색하세요.');
         const documents = this.documents(rows, id);
         const entries = rows.flatMap(row => row.pages.map(page => ({ ...page, id: row.id })));
         await prepareLocalIndex(entries, () => new Promise(resolve => setImmediate(resolve)));
         const current = await this.rows(await this.permission(id, token));
-        if (digest(JSON.stringify(current.map(row => [row.id, row.version, row.status]))) !== revision) deny(409, '공유 자료가 갱신되었습니다. 다시 검색하세요.');
+        if (corpusRevision(current) !== revision) deny(409, '공유 자료가 갱신되었습니다. 다시 검색하세요.');
         const value = { revision, documents, entries, stats: summarizeIndex(documents, entries) };
         this.cache.delete(id); this.cache.set(id, value);
         while (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value);
@@ -120,7 +121,7 @@ export class PublicLinks {
   async catalog(id, token) {
     const link = await this.permission(id, token);
     const rows = await this.rows(link); const documents = this.documents(rows, id);
-    const revision = digest(JSON.stringify(rows.map(row => [row.id, row.version, row.status])));
+    const revision = corpusRevision(rows);
     let cached = this.manifests.get(id);
     if (cached?.revision !== revision) {
       cached = { revision, stats: metadataStats(documents, await this.rows(link, false, undefined, true)) };

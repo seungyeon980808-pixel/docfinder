@@ -1,3 +1,4 @@
+import { readHwpPageText, HWP_TEXT_INDEX_VERSION } from "./hwp-page-text.js";
 import { matchProximity, parseSearchTerms } from "./search.js?v=phrase-map-2";
 import { searchLocalIndex } from "./local-index.js?v=phrase-map-2";
 
@@ -51,7 +52,7 @@ async function extractPages(bytes) {
   const document = new core.HwpDocument(new Uint8Array(bytes));
   try {
     return Array.from({ length: document.pageCount() }, (_, index) => ({
-      page: index + 1, text: parseRhwpUnicodeText(document.getPageText(index))
+      page: index + 1, text: readHwpPageText(document, index)
     }));
   } finally {
     document.free();
@@ -70,7 +71,7 @@ function openDatabase() {
 
 async function readCachedPages(documentItem) {
   const memory = memoryIndex.get(documentItem.id);
-  if (memory?.modifiedTime === documentItem.modifiedTime && Array.isArray(memory.pages)) return memory.pages;
+  if (memory?.textIndexVersion === HWP_TEXT_INDEX_VERSION && memory?.modifiedTime === documentItem.modifiedTime && Array.isArray(memory.pages)) return memory.pages;
   const database = await openDatabase().catch(() => null);
   if (!database) return null;
   const record = await new Promise((resolve) => {
@@ -79,13 +80,13 @@ async function readCachedPages(documentItem) {
     request.onerror = () => resolve(null);
   });
   database.close();
-  if (record?.modifiedTime !== documentItem.modifiedTime || !Array.isArray(record.pages)) return null;
+  if (record?.textIndexVersion !== HWP_TEXT_INDEX_VERSION || record?.modifiedTime !== documentItem.modifiedTime || !Array.isArray(record.pages)) return null;
   memoryIndex.set(documentItem.id, record);
   return record.pages;
 }
 
 async function cachePages(documentItem, pages) {
-  const record = { id: documentItem.id, modifiedTime: documentItem.modifiedTime, pages };
+  const record = { id: documentItem.id, modifiedTime: documentItem.modifiedTime, textIndexVersion: HWP_TEXT_INDEX_VERSION, pages };
   memoryIndex.set(documentItem.id, record);
   const database = await openDatabase().catch(() => null);
   if (!database) return;

@@ -1,3 +1,4 @@
+import { readHwpPageText } from "./hwp-page-text.js";
 import { readPdfTextContent } from "./pdf-text-content.js?v=phrase-map-2";
 
 const assets = new URL("../vendor/pdfjs/", import.meta.url).href;
@@ -39,7 +40,7 @@ async function extract({ id, format, bytes }) {
       document = new core.HwpDocument(new Uint8Array(bytes));
       const count = document.pageCount();
       for (let page = 1; page <= count; page++) {
-        const text = JSON.parse(document.getPageText(page - 1));
+        const text = readHwpPageText(document, page - 1);
         if (typeof text !== "string") throw new Error("문서 본문 형식이 올바르지 않습니다.");
         pages.push({ page, text });
         self.postMessage({ id, progress: { page, total: count } });

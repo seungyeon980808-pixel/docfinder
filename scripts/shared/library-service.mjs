@@ -1,3 +1,4 @@
+import { corpusRevision } from "./catalog-metadata.mjs";
 import { randomUUID } from 'node:crypto';
 import { opaque, emailAddress, deny, digest } from './security.mjs';
 import { driveFolderId } from './folder-reader.mjs';
@@ -87,7 +88,7 @@ export class LibraryService {
     const library = await this.permission(user, id);
     const rows = (await this.db.query('SELECT id,metadata,version,status FROM df_documents WHERE library_id=$1 ORDER BY id', [id])).rows;
     await this.permission(user, id);
-    const signature = digest(JSON.stringify(rows.map(row => [row.id, row.version, row.status])));
+    const signature = corpusRevision(rows);
     return { library, rows, signature, documents: sharedDocuments(rows, id) };
   }
   async corpus(user, id) {
@@ -97,7 +98,7 @@ export class LibraryService {
       cached = await this.preparation.schedule(`${id}:${signature}`, async () => {
         if (this.cache.get(id)?.signature === signature) return this.cache.get(id);
         const rows = (await this.db.query('SELECT * FROM df_documents WHERE library_id=$1 ORDER BY id', [id])).rows;
-        if (digest(JSON.stringify(rows.map(row => [row.id, row.version, row.status]))) !== signature) deny(409, '검색 자료가 갱신되었습니다. 다시 검색하세요.');
+        if (corpusRevision(rows) !== signature) deny(409, '검색 자료가 갱신되었습니다. 다시 검색하세요.');
         const documents = sharedDocuments(rows, id);
         const entries = rows.flatMap(row => row.pages.map(page => ({ ...page, id: row.id })));
         await prepareLocalIndex(entries, () => new Promise(resolve => setImmediate(resolve)));

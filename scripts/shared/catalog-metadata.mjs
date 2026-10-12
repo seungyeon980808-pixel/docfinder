@@ -1,3 +1,7 @@
+import { digest } from "./security.mjs";
+
+export const corpusRevision = rows => digest(JSON.stringify(rows.map(row => [row.id, row.version, row.status, row.metadata.textIndexVersion || 0])));
+
 // Count pages in PostgreSQL; do not transfer all extracted text just to show a list.
 const blankCharacters = `[[:space:]${String.fromCodePoint(0x200b, 0x200c, 0x200d, 0xfeff, 0x00ad)}]`;
 export const pageCountsSql = `

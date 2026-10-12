@@ -1,3 +1,4 @@
+import { readHwpPageText } from '../../js/hwp-page-text.js';
 import { parentPort, workerData } from 'node:worker_threads';
 import fs from 'node:fs/promises';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -20,7 +21,7 @@ try {
     await rhwp.default({ module_or_path: await fs.readFile(new URL('../../vendor/rhwp-core/rhwp_bg.wasm', import.meta.url)) });
     document = new rhwp.HwpDocument(bytes);
     if (document.pageCount() > 10000) throw new Error('Page limit');
-    for (let page = 1; page <= document.pageCount(); page++) pages.push({ page, text: JSON.parse(document.getPageText(page - 1)) });
+    for (let page = 1; page <= document.pageCount(); page++) pages.push({ page, text: readHwpPageText(document, page - 1) });
   }
   parentPort.postMessage({ pages });
 } catch { parentPort.postMessage({ error: '문서 색인에 실패했습니다. 암호와 파일 형식을 확인하세요.' }); }

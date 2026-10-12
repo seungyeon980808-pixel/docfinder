@@ -1,0 +1,51 @@
+{
+  "indexedTotal": 105,
+  "previewTotal": 105,
+  "counts": [
+    {
+      "page": 2,
+      "index": 7,
+      "preview": 7
+    },
+    {
+      "page": 4,
+      "index": 14,
+      "preview": 14
+    },
+    {
+      "page": 5,
+      "index": 12,
+      "preview": 12
+    },
+    {
+      "page": 6,
+      "index": 10,
+      "preview": 10
+    },
+    {
+      "page": 7,
+      "index": 10,
+      "preview": 10
+    },
+    {
+      "page": 8,
+      "index": 7,
+      "preview": 7
+    },
+    {
+      "page": 13,
+      "index": 5,
+      "preview": 5
+    },
+    {
+      "page": 15,
+      "index": 37,
+      "preview": 37
+    },
+    {
+      "page": 39,
+      "index": 3,
+      "preview": 3
+    }
+  ]
+}

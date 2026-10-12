@@ -45,6 +45,9 @@ test("local indexing keeps its legacy behavior of ignoring unsupported regular f
   await mkdir(path.join(isolatedApp, "scripts"), { recursive: true });
   await mkdir(path.join(isolatedApp, "js"), { recursive: true });
   await writeFile(path.join(isolatedApp, "js", "index-health.js"), await readFile(path.join(appRoot, "js", "index-health.js")));
+  for (const name of ["hwp-page-text.js", "search-matches.js", "search.js"]) {
+    await writeFile(path.join(isolatedApp, "js", name), await readFile(path.join(appRoot, "js", name)));
+  }
   await mkdir(path.join(isolatedApp, "private"), { recursive: true });
   await mkdir(source);
   await writeFile(path.join(source, "notes.txt"), "legacy local-only fixture");

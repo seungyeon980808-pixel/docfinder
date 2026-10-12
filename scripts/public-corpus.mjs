@@ -1,3 +1,4 @@
+import { readHwpPageText } from "../js/hwp-page-text.js";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -139,7 +140,7 @@ export async function extractPublicDocument(document, appRoot) {
     return Array.from({ length: hwp.pageCount() }, (_, index) => ({
       id: document.id,
       page: index + 1,
-      text: JSON.parse(hwp.getPageText(index))
+      text: readHwpPageText(hwp, index)
     }));
   } finally {
     hwp.free();

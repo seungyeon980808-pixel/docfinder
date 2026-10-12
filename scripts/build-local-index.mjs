@@ -1,3 +1,4 @@
+import { readHwpPageText, HWP_TEXT_INDEX_VERSION } from "../js/hwp-page-text.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
@@ -70,7 +71,7 @@ async function hwpText(filePath, id, bytes) {
   const document = new rhwp.HwpDocument(new Uint8Array(bytes || await fs.readFile(filePath)));
   try {
     return Array.from({ length: document.pageCount() }, (_, index) => ({
-      id, page: index + 1, text: JSON.parse(document.getPageText(index))
+      id, page: index + 1, text: readHwpPageText(document, index)
     }));
   } finally {
     document.free();
@@ -137,11 +138,11 @@ export async function buildLocalIndex(options = {}) {
       source: "local", sourceUrl: `${sourceUrl}?v=${sha256.slice(0, 16)}`, previewUrl: format === "pdf" ? `${sourceUrl}?v=${sha256.slice(0, 16)}` : "",
       webViewLink: id.startsWith("local-") ? "" : `https://drive.google.com/file/d/${id}/view`,
       page: null, heading: "원문", excerpt: "로컬 색인으로 검색할 수 있는 원문입니다.",
-      ...(format === "pdf" ? {} : { textIndexVersion: 2 })
+      ...(format === "pdf" ? {} : { textIndexVersion: HWP_TEXT_INDEX_VERSION })
     };
     documents.push(documentItem);
     if (previous?.sha256 === sha256 && previous.indexStatus !== "error" && previousEntries.has(id)
-      && (format === "pdf" || previous.textIndexVersion === 2
+      && (format === "pdf" || previous.textIndexVersion === HWP_TEXT_INDEX_VERSION
         && previousEntries.get(id).every((entry) => Number.isSafeInteger(entry.page) && entry.page > 0))) {
       const reusedEntries = previousEntries.get(id);
       entries.push(...reusedEntries);

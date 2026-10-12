@@ -1,3 +1,4 @@
+import { HWP_TEXT_INDEX_VERSION } from '../../js/hwp-page-text.js';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 
@@ -16,8 +17,20 @@ export function extractPages(format, bytes, timeoutMs = 180000) {
   });
 }
 
+// Schedule old HWP/HWPX extraction once per startup. Keep usable pages until
+// the leased job atomically publishes its replacement; never reset active leases.
+export async function queueHwpIndexRefresh(db) {
+  return db.transaction(async tx => {
+    const rows = (await tx.query(`SELECT library_id,id,version FROM df_documents
+      WHERE metadata->>'format' IN ('hwp','hwpx') AND COALESCE(metadata->>'textIndexVersion','')<>$1`, [String(HWP_TEXT_INDEX_VERSION)])).rows;
+    for (const row of rows) await tx.query(`INSERT INTO df_jobs(id,library_id,document_id,version) VALUES($1,$2,$3,$4)
+      ON CONFLICT(library_id,document_id,version) DO UPDATE SET status='pending',attempts=0,available_at=now(),lease_until=NULL,lease_owner=NULL
+      WHERE df_jobs.status='done'`, [randomUUID(), row.library_id, row.id, row.version]);
+  });
+}
+
 export function createJobs({ db, drive, service, extract = extractPages, pollMs = 1000, syncMs = 60000 }) {
-  const owner = randomUUID(); let stopped = false; let busy = false; let syncing = false; let lastSync = 0; let running = Promise.resolve();
+  const owner = randomUUID(); let refreshQueued = false; let stopped = false; let busy = false; let syncing = false; let lastSync = 0; let running = Promise.resolve();
   async function claim() {
     return db.transaction(async (tx) => {
       const job = (await tx.query(`SELECT * FROM df_jobs WHERE (status='pending' AND available_at<=now()) OR (status='running' AND lease_until<now()) ORDER BY available_at LIMIT 1 FOR UPDATE SKIP LOCKED`)).rows[0];
@@ -37,7 +50,7 @@ export function createJobs({ db, drive, service, extract = extractPages, pollMs 
       await db.transaction(async (tx) => {
         const current = (await tx.query('SELECT status,lease_owner FROM df_jobs WHERE id=$1 FOR UPDATE', [job.id])).rows[0];
         if (current?.status !== 'running' || current.lease_owner !== owner) return;
-        await tx.query(`UPDATE df_documents SET pages=$4,status=$5 WHERE library_id=$1 AND id=$2 AND version=$3`, [job.library_id, job.document_id, job.version, JSON.stringify(pages), pages.some((page) => page.text.trim()) ? 'ready' : 'textless']);
+        await tx.query(`UPDATE df_documents SET pages=$4,status=$5,metadata=metadata || $6::jsonb WHERE library_id=$1 AND id=$2 AND version=$3`, [job.library_id, job.document_id, job.version, JSON.stringify(pages), pages.some((page) => page.text.trim()) ? 'ready' : 'textless', JSON.stringify(['hwp','hwpx'].includes(row.metadata.format) ? { textIndexVersion: HWP_TEXT_INDEX_VERSION } : {})]);
         await tx.query(`UPDATE df_jobs SET status='done',lease_until=NULL WHERE id=$1`, [job.id]);
       });
     } catch {
@@ -59,7 +72,7 @@ export function createJobs({ db, drive, service, extract = extractPages, pollMs 
   }
   async function tick() {
     if (busy || stopped) return; busy = true;
-    try { await once(); if (Date.now() - lastSync > syncMs) { lastSync = Date.now(); await sync(); } }
+    try { if (!refreshQueued) { await queueHwpIndexRefresh(db); refreshQueued = true; } await once(); if (Date.now() - lastSync > syncMs) { lastSync = Date.now(); await sync(); } }
     catch { console.error('DocFinder background job will retry.'); }
     finally { busy = false; }
   }
