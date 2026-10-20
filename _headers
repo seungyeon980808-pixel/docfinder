@@ -1,0 +1,10 @@
+/*
+  X-Robots-Tag: noindex, nofollow
+/library/catalog.json
+  Cache-Control: no-store
+/library/search-index.json
+  Cache-Control: no-store
+/library/manifest.json
+  Cache-Control: no-store
+/library/originals/*
+  Cache-Control: public, max-age=31536000, immutable

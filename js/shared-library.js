@@ -1,0 +1,268 @@
+import { escapeHtml } from './search-matches.js';
+import { createGuestLibrary } from './guest-library.js';
+import { createPublicSharing } from './public-sharing.js';
+import { createPublicationSettings } from './publication-settings.js';
+import { createByteCache } from './preview-cache.js?v=responsiveness-1';
+import { createIndexPreparation } from './background-index.js';
+
+export function createSharedLibrary({ onChange, notify }) {
+  const publicId = /^\/p\/([a-f0-9]{64})$/u.exec(location.pathname)?.[1];
+  if (publicId) return createGuestLibrary({ id: publicId, onChange, notify });
+  let session; let libraries = []; let library; let catalog; let pending; let accessError = '';
+  let generation = 0; let abort = new AbortController(); let polling = false; let busy = false; let progress = '';
+  const uploads = new Map();
+  let searchAbort;
+  const libraryBase = () => library?.role === 'public' ? `/api/open/libraries/${library.id}` : `/api/libraries/${library.id}`;
+  const preparation = createIndexPreparation({ request: signal => request(`${libraryBase()}/prepare`, { signal }),
+    isCurrent: revision => catalog?.revision === revision, onChange: () => emit() });
+  const originalBytes = createByteCache(async (item, { signal }) => {
+    const response = await fetchOriginal(item, 'GET', signal);
+    return response.arrayBuffer();
+  }, 48 * 1024 * 1024, { validate: (item, { signal }) => fetchOriginal(item, 'HEAD', signal) });
+  async function fetchOriginal(item, method, signal) {
+    if (item.libraryId !== library?.id) throw new DOMException('문서함을 다시 선택하세요.', 'AbortError');
+    const response = await fetch(item.sourceUrl, { method, credentials: 'same-origin', cache: 'no-store', signal: signal ? AbortSignal.any([signal, abort.signal]) : abort.signal });
+    if (!response.ok) {
+      if ([401, 403, 404, 409].includes(response.status)) { originalBytes.clear(); await refresh(); }
+      throw new Error('원문을 불러오지 못했습니다. 권한과 연결을 확인한 뒤 다시 시도하세요.');
+    }
+    return response;
+  }
+  const shareId = /^\/s\/([a-f0-9]{64})$/u.exec(location.pathname)?.[1];
+  const publicSharing = createPublicSharing({ request, notify, context: () => ({ library, catalog, generation }) });
+  const publications = createPublicationSettings({ request, notify, context: () => ({library, catalog, generation}), onSaved: async () => { await refresh(); await publicSharing.open(); } });
+  function snapshot() { return { sharedUser: session?.user, sharedConfigured: session?.configured, sharedLibraries: libraries, sharedLibrary: library,
+    sharedPending: pending, sharedAccessError: accessError, documents: catalog?.documents || [], indexStats: catalog?.stats,
+    indexPreparation: preparation.status === 'ready' && catalog?.documents.some(item => item.indexStatus === 'indexing') ? 'loading' : preparation.status,
+    sourceName: library?.name || '공유 문서함', libraryId: library?.id || '', lastSync: catalog?.lastSync,
+    driveConnected: Boolean(catalog?.driveConnected), sharedFolderSource: catalog?.folderSource, personalBusy: busy, personalProgress: progress,
+    connection: accessError || catalog?.stats?.failures || catalog?.folderSource?.status === 'error' ? 'error' : busy ? 'indexing' : library?.role === 'public' || catalog?.driveConnected || catalog?.folderSource?.status === 'ready' ? 'connected' : 'idle' }; }
+  const emit = () => onChange(snapshot());
+  function clear() {
+    preparation.reset();
+    originalBytes.clear(); searchAbort?.abort();
+    generation++; abort.abort(); abort = new AbortController(); library = undefined; catalog = undefined; pending = undefined; accessError = ''; busy = false; progress = '';
+    document.querySelector('#sharing-dialog').close(); document.querySelector('#sharing-members').replaceChildren(); document.querySelector('#sharing-link').value = ''; document.querySelector('#invite-email').value = ''; emit();
+    publicSharing.reset();
+    publications.reset();
+    document.querySelector('#folder-dialog').close(); document.querySelector('#folder-reader-email').value = ''; document.querySelector('#folder-url').value = ''; document.querySelector('#folder-proof-content').value = ''; document.querySelector('#folder-proof-name').value = '';
+  }
+  async function request(url, { method = 'GET', body, signal = abort.signal } = {}) {
+    const response = await fetch(url, { method, credentials: 'same-origin', cache: 'no-store', signal,
+      headers: { ...(method !== 'GET' ? { 'X-CSRF-Token': session?.csrf } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) { const error = new Error(value.error || '요청을 완료하지 못했습니다.'); error.status = response.status; throw error; }
+    return value;
+  }
+  async function choose(item, updateUrl = false) {
+    clear(); const job = generation; library = item; pending = item?.status === 'pending' ? item : undefined; emit();
+    if (!item || pending) return;
+    try { const next = await request(libraryBase()); if (job !== generation) return; catalog = next; library = { ...item, ...next.library }; emit();
+      void preparation.prepare(next.revision, next.indexReady);
+      if (updateUrl) history.replaceState(null, '', `/s/${item.share_id}`);
+    } catch (error) { if (job !== generation || error.name === 'AbortError') return; catalog = undefined; accessError = error.message; emit(); }
+  }
+  async function loadLibraries() {
+    const [data, publicData] = await Promise.all([session?.user ? request('/api/libraries') : Promise.resolve({libraries:[]}), request('/api/open/libraries')]);
+    const privateLibraries = data.libraries;
+    libraries = [...privateLibraries, ...publicData.libraries.filter(item => !privateLibraries.some(privateItem => privateItem.id === item.id))];
+    if (shareId) {
+      const match = libraries.find(item => item.share_id === shareId);
+      if (match) await choose(match);
+      else { clear(); accessError = '이 문서함의 비공개 문서는 관리자가 등록한 이메일로 로그인해야 볼 수 있습니다.'; emit(); }
+    } else {
+      const ownedPublic = privateLibraries.find(item => publicData.libraries.some(p => p.id === item.id));
+      await choose(ownedPublic || privateLibraries.find(item => item.role === 'reader') || libraries.find(item => item.role === 'public') || libraries[0]);
+    }
+  }
+  async function refresh() {
+    if (!library || pending || polling || busy) return;
+    polling = true; const id = library.id; const job = generation;
+    try {
+      const [latestSession, next] = await Promise.all([request('/api/session'), request(libraryBase())]);
+      if (job !== generation) return;
+      if (latestSession.user?.id !== session?.user?.id) {
+        session = latestSession; libraries = []; clear();
+        await loadLibraries();
+        return;
+      }
+      session = latestSession;
+      if (job !== generation) return;
+      if (library.role === 'public' && session.user) {
+        const allowed = (await request('/api/libraries')).libraries.find(item => item.id === id);
+        if (job !== generation) return;
+        if (allowed) { await loadLibraries(); return; }
+      }
+      const changed = accessError || next.revision !== catalog?.revision || next.driveConnected !== catalog?.driveConnected || JSON.stringify(next.folderSource) !== JSON.stringify(catalog?.folderSource);
+      catalog = next; accessError = ''; if (changed) emit();
+      void preparation.prepare(next.revision, next.indexReady);
+    } catch (error) {
+      if (job !== generation || error.name === 'AbortError') return;
+      if (![401, 403, 404, 410].includes(error.status)) { accessError = '목록 갱신에 실패했습니다. 현재 문서를 유지합니다. 목록 새로고침으로 다시 시도하세요.'; emit(); return; }
+      clear(); accessError = error.status === 401 ? '로그인이 만료되었습니다. 다시 로그인하세요.' : error.message;
+      if (error.status === 401) session.user = null;
+      await loadLibraries();
+      notify('비공개 문서의 접근 권한이 없습니다. 공개 문서를 표시합니다.');
+    } finally { polling = false; }
+  }
+  async function start() {
+    new ResizeObserver(([entry]) => document.documentElement.style.setProperty('--shared-header-height', `${entry.target.getBoundingClientRect().height}px`)).observe(document.querySelector('.topbar'));
+    session = await request('/api/session'); emit();
+    await loadLibraries();
+    void request('/api/build-info').then(info => {
+      const time = new Date(info.updatedAt).toLocaleString('sv-SE', {timeZone:'Asia/Seoul'}).slice(0,16);
+      document.querySelectorAll('[data-change-summary]').forEach(badge => {
+        badge.textContent = `${time} · 공개·이메일 권한 · ${info.commit?.slice(0,7) || '빌드'}${info.dirty ? ' · 미커밋' : ''}`;
+        badge.title = `${info.summary} · ${info.branch} · ${info.commit}${info.dirty ? ' · 미커밋 수정 포함' : ''}`;
+      });
+    }).catch(()=>{});
+    const connectionResult = new URLSearchParams(location.search); const result = connectionResult.get('drive');
+    if (result) {
+      const reasons = { access_denied: 'Google에서 Drive 연결을 허용하지 않았습니다. 접근 권한과 앱의 테스트 사용자 설정을 확인하세요.',
+        scope_missing: 'Drive 파일 접근 권한을 선택한 뒤 연결하세요.', refresh_missing: '지속적인 Drive 연결을 허용한 뒤 다시 연결하세요.',
+        account_mismatch: '로그인한 계정과 같은 Google 계정의 Drive를 연결하세요.', temporary: 'Google Drive에 일시적으로 연결하지 못했습니다. 잠시 뒤 다시 시도하세요.' };
+      notify(result === 'connected' ? 'Drive를 연결했습니다. 색인을 자동으로 생성합니다.' : result === 'sync-pending'
+        ? 'Drive 연결은 완료됐습니다. 목록 갱신은 자동으로 다시 시도합니다.' : reasons[connectionResult.get('drive_reason')] || 'Drive 연결을 완료하지 못했습니다. 연결을 다시 시도하세요.');
+      history.replaceState(null, '', location.pathname);
+    }
+    setInterval(() => { if (!document.hidden) refresh(); }, 15000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+    document.querySelector('#library-picker').addEventListener('change', (event) => choose(libraries.find((item) => item.id === event.target.value), true));
+    document.querySelector('#accept-invite-button').addEventListener('click', async () => {
+      try { const item = pending; await request(`/api/libraries/${item.id}/accept`, { method: 'POST', body: {} }); libraries = (await request('/api/libraries')).libraries; await choose(libraries.find((next) => next.id === item.id)); }
+      catch (error) { notify(error.message); }
+    });
+    document.querySelector('#google-login-button').addEventListener('click', login);
+    document.querySelector('#shared-logout-button').addEventListener('click', logout);
+    document.querySelector('#share-button').addEventListener('click', sharing);
+    document.querySelector('#folder-connect-button').addEventListener('click', folderSettings);
+    document.querySelector('#copy-folder-reader').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(document.querySelector('#folder-reader-email').value); notify('폴더 공유에 추가할 주소를 복사했습니다.'); } catch { document.querySelector('#folder-reader-email').select(); }
+    });
+    document.querySelector('#folder-connect-form').addEventListener('submit', async (event) => {
+      event.preventDefault(); const button = event.submitter; const id = library?.id; const job = generation; button.disabled = true;
+      try { const value = await request(`/api/libraries/${id}/folder`, { method: 'POST', body: { url: document.querySelector('#folder-url').value } });
+        if (job !== generation) return;
+        document.querySelector('#folder-dialog').close(); await refresh(); notify(value.pending ? '폴더를 연결했습니다. 목록 갱신은 자동으로 다시 시도합니다.' : '폴더를 연결했습니다. 본문 색인은 자동으로 생성됩니다.');
+      } catch (error) { if (job === generation) document.querySelector('#folder-source-status').textContent = error.message; }
+      finally { button.disabled = false; }
+    });
+    document.querySelector('#folder-disconnect').addEventListener('click', async () => {
+      const id = library?.id; const job = generation;
+      try { await request(`/api/libraries/${id}/folder`, { method: 'DELETE' }); if (job !== generation) return; document.querySelector('#folder-dialog').close(); await refresh(); notify('폴더 연결과 해당 검색 색인을 제거했습니다.'); } catch (error) { notify(error.message); }
+    });
+    document.querySelector('#folder-proof-download').addEventListener('click', async () => {
+      const id = library?.id; const job = generation;
+      try { const value = await request(`/api/libraries/${id}/folder/prepare`, { method: 'POST', body: { url: document.querySelector('#folder-url').value } }); if (job !== generation) return;
+        document.querySelector('#folder-proof-content').value = value.contents; document.querySelector('#folder-proof-name').value = value.filename;
+        const url = URL.createObjectURL(new Blob([value.contents], { type: 'text/plain;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = value.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+        document.querySelector('#folder-source-status').textContent = '승인 파일을 해당 Drive 폴더에 넣은 뒤 연결하세요.';
+      } catch (error) { notify(error.message); }
+    });
+    document.querySelector('#sharing-form').addEventListener('submit', async (event) => {
+      event.preventDefault(); const input = document.querySelector('#invite-email'); const button = event.submitter; button.disabled = true;
+      try { await request(`/api/libraries/${library.id}/invitations`, { method: 'POST', body: { email: input.value } }); input.value = ''; await members(); notify('이메일을 등록했습니다. 해당 계정으로 로그인하면 비공개 문서를 볼 수 있습니다.'); }
+      catch (error) { notify(error.message); }
+      finally { button.disabled = false; }
+    });
+    document.querySelector('#sharing-members').addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-revoke-email]'); if (!button) return; button.disabled = true;
+      try { await request(`/api/libraries/${library.id}/invitations/${encodeURIComponent(button.dataset.revokeEmail)}`, { method: 'DELETE' }); await members(); notify('열람 권한을 회수했습니다.'); }
+      catch (error) { notify(error.message); button.disabled = false; }
+    });
+    document.querySelector('#copy-library-link').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(new URL(`/s/${library.share_id}`, location.origin).href); notify('문서함 링크를 복사했습니다. 비공개 문서는 등록한 이메일만 볼 수 있습니다.'); }
+      catch { const input = document.querySelector('#sharing-link'); input.focus(); input.select(); notify('선택한 링크를 복사하세요.'); }
+    });
+    document.querySelectorAll('[data-close-shared-dialog]').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
+  }
+  async function login() {
+    const dialog = document.querySelector('#login-dialog'); const message = document.querySelector('#login-message'); const slot = document.querySelector('#google-signin-slot'); slot.replaceChildren(); dialog.showModal();
+    if (!session?.configured) { message.textContent = 'Google 로그인을 준비하고 있습니다. 운영자가 Google 연결 설정을 마치면 사용할 수 있습니다.'; return; }
+    message.textContent = '관리자가 등록한 이메일로 로그인하면 비공개 문서도 볼 수 있습니다. 등록되지 않은 계정은 공개 문서만 볼 수 있습니다.';
+    try {
+      const started = Date.now();
+      while (!globalThis.google?.accounts?.id) { if (Date.now() - started > 8000) throw new Error('Google 로그인 화면을 불러오지 못했습니다. 새로고침하세요.'); await new Promise((resolve) => setTimeout(resolve, 100)); }
+      google.accounts.id.initialize({ client_id: session.clientId, callback: async ({ credential }) => {
+        try { const next = await request('/api/auth/google', { method: 'POST', body: { credential } }); session = { ...session, ...next }; clear(); dialog.close(); await loadLibraries(); }
+        catch (error) { message.textContent = error.message; }
+      } });
+      google.accounts.id.renderButton(slot, { type: 'standard', theme: 'outline', size: 'large', text: 'signin_with', width: 280 });
+    } catch (error) { message.textContent = error.message; }
+  }
+  async function logout() {
+    try { const next = await request('/api/logout', { method: 'POST', body: {} }); session = { ...session, ...next }; libraries = []; clear(); globalThis.google?.accounts?.id?.disableAutoSelect(); await loadLibraries(); }
+    catch (error) { notify(error.message); }
+  }
+  async function members() {
+    const value = await request(`/api/libraries/${library.id}/invitations`);
+    const labels = { pending: '등록됨 · 로그인 시 열람 가능', accepted: '열람 허용', revoked: '권한 회수됨' };
+    document.querySelector('#sharing-members').innerHTML = value.invitations.length ? value.invitations.map((item) => `<li><div><strong>${escapeHtml(item.email)}</strong><small>${labels[item.status]}</small></div>${item.status !== 'revoked' ? `<button type="button" class="secondary-button" data-revoke-email="${escapeHtml(item.email)}">권한 회수</button>` : ''}</li>`).join('') : '<li class="sharing-empty">아직 등록한 이메일이 없습니다.</li>';
+  }
+  async function sharing() {
+    if (library?.role !== 'owner') return;
+    const job = generation;
+    try { await members(); await publications.open(); await publicSharing.open(); if (job !== generation) return; document.querySelector('#sharing-title').textContent = library.name; document.querySelector('#sharing-link').value = new URL(`/s/${library.share_id}`, location.origin).href; document.querySelector('#sharing-dialog').showModal(); }
+    catch (error) { notify(error.message); }
+  }
+  async function folderSettings() {
+    if (library?.role !== 'owner') return;
+    const id = library.id; const job = generation;
+    try { const value = await request(`/api/libraries/${id}/folder`); if (job !== generation) return;
+      document.querySelector('#folder-reader-email').value = value.readerEmail;
+      document.querySelector('#folder-url').value = value.source ? `https://drive.google.com/drive/folders/${value.source.folder_id}` : '';
+      document.querySelector('#folder-connect-submit').disabled = !value.configured;
+      document.querySelector('#folder-setup-message').textContent = value.configured ? '필요한 폴더만 공유하면 됩니다. 전체 Drive 접근 권한은 요청하지 않습니다.' : '운영자가 폴더 연결 설정을 준비하고 있습니다.';
+      document.querySelector('#folder-source-status').textContent = value.source?.last_error || (value.source ? `${value.source.name} 연결됨` : '');
+      document.querySelector('#folder-disconnect').hidden = !value.source;
+      document.querySelector('#folder-dialog').showModal();
+    } catch (error) { notify(error.message); }
+  }
+  return { start, refresh, login, async connect() {
+    try { const value = await request(`/api/libraries/${library.id}/drive`, { method: 'POST', body: {} }); location.assign(value.url); } catch (error) { notify(error.message); }
+  }, async disconnect() {
+    await request(`/api/libraries/${library.id}/drive`, { method: 'DELETE' }); await refresh();
+  }, async sync() { if (library?.role === 'owner') await request(`/api/libraries/${library.id}/sync`, { method: 'POST', body: {} }); await refresh(); },
+  cancelSearch() { searchAbort?.abort(); },
+  prepareSearch() { return preparation.prepare(catalog?.revision, false, true); },
+  async search(query, mode, matchScope = "document") {
+    if (!library || pending) return [];
+    searchAbort?.abort(); searchAbort = new AbortController();
+    return (await request(`${libraryBase()}/search?${new URLSearchParams({ q: query, mode, matchScope })}`, { signal: AbortSignal.any([searchAbort.signal, abort.signal]) })).documents;
+  },
+  getBytes: originalBytes,
+  async retry(item) { await request(`/api/libraries/${library.id}/documents/${item.id}/retry`, { method: 'POST', body: {} }); await refresh(); },
+  async trash(item) { await request(`/api/libraries/${library.id}/documents/${item.id}`, { method: 'DELETE' }); await refresh(); },
+  async upload(files) {
+    if (busy || library?.role !== 'owner') return;
+    const id = library.id; const job = generation; busy = true; emit();
+    try {
+      for (const [index, file] of [...files].entries()) {
+        const maxFileBytes = session.maxFileBytes || 128 * 1024 * 1024;
+        if (!/\.(pdf|hwp|hwpx)$/iu.test(file.name) || file.size < 1 || file.size > maxFileBytes) throw new Error(`${maxFileBytes / 1024 / 1024}MB 이하의 PDF·HWP·HWPX 파일을 선택하세요.`);
+        const signature = `${session.user.id}:${id}:${file.name}:${file.size}:${file.lastModified}`;
+        let uploadId = uploads.get(signature);
+        if (!uploadId) { uploadId = crypto.randomUUID(); uploads.set(signature, uploadId); }
+        progress = `업로드 ${index + 1}/${files.length} · ${file.name}`; emit();
+        const next = await request(`/api/libraries/${id}/uploads`, { method: 'POST', body: { name: file.name, size: file.size, uploadId } });
+        if (job !== generation) throw new DOMException('업로드를 중단했습니다.', 'AbortError');
+        if (!next.completed) await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest(); xhr.open('PUT', `/api/libraries/${id}/uploads/${uploadId}`); xhr.setRequestHeader('X-CSRF-Token', session.csrf);
+          const signal = abort.signal;
+          const cancel = () => xhr.abort(); signal.addEventListener('abort', cancel, { once: true });
+          const finish = (error) => { signal.removeEventListener('abort', cancel); error ? reject(error) : resolve(); };
+          xhr.upload.onprogress = (event) => { if (job === generation && event.lengthComputable) { progress = `${file.name} · 업로드 ${Math.round(event.loaded / event.total * 100)}%`; emit(); } };
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) return finish();
+            let value; try { value = JSON.parse(xhr.responseText); } catch { /* A proxy can return HTML on failure. */ }
+            finish(new Error(value?.error || '업로드에 실패했습니다. 같은 파일을 다시 선택하세요.'));
+          };
+          xhr.onerror = () => finish(new Error('연결이 끊겼습니다. 같은 파일을 다시 선택해 업로드를 재시도하세요.'));
+          xhr.onabort = () => finish(new DOMException('업로드를 중단했습니다.', 'AbortError')); xhr.send(file);
+        });
+      }
+      notify('업로드했습니다. 서버에서 자동으로 색인합니다.');
+    } finally { if (job === generation) { busy = false; progress = ''; emit(); await refresh(); } }
+  } };
+}
